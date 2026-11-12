@@ -37,3 +37,14 @@ def test_split_creates_one_pdf_per_page(tmp_path: Path) -> None:
 
     assert len(outputs) == 2
     assert all(len(PdfReader(str(output)).pages) == 1 for output in outputs)
+
+
+def test_compress_writes_output_after_attaching_pages(tmp_path: Path) -> None:
+    source = tmp_path / "source.pdf"
+    output = tmp_path / "compressed.pdf"
+    make_pdf(source, 1)
+
+    PdfPageOperations().compress(source, output)
+
+    assert output.is_file()
+    assert len(PdfReader(str(output)).pages) == 1

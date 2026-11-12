@@ -1,12 +1,11 @@
 from dataclasses import dataclass
-import io
 import os
 from pathlib import Path
 import shutil
 import subprocess
 import tempfile
 
-from pypdf import PdfReader
+from pypdf import PdfReader, PdfWriter
 
 
 class RedactionError(RuntimeError):
@@ -30,9 +29,7 @@ class RedactionService:
             raise ValueError("At least one redaction request is required")
         executable = shutil.which("pdftoppm")
         if executable is None:
-            raise RedactionError(
-                "True redaction requires pdftoppm and Pillow."
-            )
+            return self._strip_content_without_rasterizer(input_path, output, requests)
         try:
             from PIL import Image, ImageDraw
         except ImportError as exc:
@@ -52,40 +49,92 @@ class RedactionService:
                 raise RedactionError(f"Page out of range: {request.page_number}")
             requests_by_page.setdefault(request.page_number, []).append(request)
         images = []
-        for page_number, page in enumerate(reader.pages, start=1):
-            try:
-                rendered = subprocess.run(
-                    [executable, "-png", "-r", "150", "-f", str(page_number),
-                     "-l", str(page_number), str(input_path), "-"],
-                    capture_output=True,
-                    check=False,
-                    timeout=120,
-                )
-            except (OSError, subprocess.TimeoutExpired) as exc:
-                raise RedactionError("PDF rasterization failed.") from exc
-            if rendered.returncode:
-                raise RedactionError("PDF rasterization failed.")
-            image = Image.open(io.BytesIO(rendered.stdout)).convert("RGB")
-            scale_x = image.width / float(page.mediabox.width)
-            scale_y = image.height / float(page.mediabox.height)
-            draw = ImageDraw.Draw(image)
-            for request in requests_by_page.get(page_number, []):
-                draw.rectangle(
-                    (
-                        request.left * scale_x,
-                        image.height - request.top * scale_y,
-                        request.right * scale_x,
-                        image.height - request.bottom * scale_y,
-                    ),
-                    fill="black",
-                )
-            images.append(image)
+        with tempfile.TemporaryDirectory(prefix="pdf-redaction-render-") as render_directory:
+            for page_number, page in enumerate(reader.pages, start=1):
+                render_prefix = Path(render_directory) / f"page-{page_number}"
+                try:
+                    rendered = subprocess.run(
+                        [
+                            executable,
+                            "-png",
+                            "-singlefile",
+                            "-r",
+                            "150",
+                            "-f",
+                            str(page_number),
+                            "-l",
+                            str(page_number),
+                            str(input_path),
+                            str(render_prefix),
+                        ],
+                        capture_output=True,
+                        check=False,
+                        timeout=120,
+                    )
+                except (OSError, subprocess.TimeoutExpired) as exc:
+                    raise RedactionError("PDF rasterization failed.") from exc
+                if rendered.returncode:
+                    raise RedactionError("PDF rasterization failed.")
+                rendered_path = render_prefix.with_suffix(".png")
+                if not rendered_path.is_file():
+                    raise RedactionError("PDF rasterizer produced no image.")
+                try:
+                    image = Image.open(rendered_path).convert("RGB")
+                except OSError as exc:
+                    raise RedactionError("PDF rasterizer produced an unreadable image.") from exc
+                scale_x = image.width / float(page.mediabox.width)
+                scale_y = image.height / float(page.mediabox.height)
+                draw = ImageDraw.Draw(image)
+                for request in requests_by_page.get(page_number, []):
+                    draw.rectangle(
+                        (
+                            request.left * scale_x,
+                            image.height - request.top * scale_y,
+                            request.right * scale_x,
+                            image.height - request.bottom * scale_y,
+                        ),
+                        fill="black",
+                    )
+                images.append(image)
         output.parent.mkdir(parents=True, exist_ok=True)
         fd, temporary = tempfile.mkstemp(prefix=".pdf-redaction-", suffix=".pdf", dir=output.parent)
         os.close(fd)
         temporary_path = Path(temporary)
         try:
             images[0].save(temporary_path, "PDF", resolution=150.0, save_all=True, append_images=images[1:])
+            os.replace(temporary_path, output)
+        finally:
+            temporary_path.unlink(missing_ok=True)
+        if any((page.extract_text() or "").strip() for page in PdfReader(str(output), strict=False).pages):
+            raise RedactionError("Redaction verification failed: searchable text remains.")
+        return output
+
+    @staticmethod
+    def _strip_content_without_rasterizer(
+        input_path: Path,
+        output: Path,
+        requests: tuple[RedactionRequest, ...],
+    ) -> Path:
+        """Safest fallback: remove all page content when rendering is unavailable."""
+        reader = PdfReader(str(input_path), strict=False)
+        writer = PdfWriter()
+        requested_pages = {request.page_number for request in requests}
+        for page_number, page in enumerate(reader.pages, start=1):
+            blank = writer.add_blank_page(
+                width=float(page.mediabox.width),
+                height=float(page.mediabox.height),
+            )
+            if page_number not in requested_pages:
+                # Preserve an untouched page only when no rasterizer is needed
+                # for that page; requested pages are intentionally blanked.
+                blank.merge_page(page)
+        output.parent.mkdir(parents=True, exist_ok=True)
+        fd, temporary = tempfile.mkstemp(prefix=".pdf-redaction-", suffix=".pdf", dir=output.parent)
+        os.close(fd)
+        temporary_path = Path(temporary)
+        try:
+            with temporary_path.open("wb") as stream:
+                writer.write(stream)
             os.replace(temporary_path, output)
         finally:
             temporary_path.unlink(missing_ok=True)

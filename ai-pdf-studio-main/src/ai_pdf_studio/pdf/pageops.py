@@ -33,8 +33,10 @@ class PdfPageOperations:
         reader = self._reader(input_path)
         writer = PdfWriter()
         for page in reader.pages:
-            page.compress_content_streams()
             writer.add_page(page)
+            # pypdf requires the page to belong to a writer before mutating
+            # its content streams.
+            writer.pages[-1].compress_content_streams()
         return self._write(writer, output)
 
     def transform(
