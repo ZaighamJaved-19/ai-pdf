@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 
 import '../app_state.dart';
 import '../widgets/common.dart';
@@ -15,25 +16,60 @@ class AppShell extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      body: SafeArea(
-        child: Row(
-          children: [
-            _Sidebar(state: state),
-            Expanded(
-              child: Column(
-                children: [
-                  _TopBar(state: state),
-                  Expanded(child: _Content(state: state)),
-                ],
-              ),
-            ),
-          ],
+    return Shortcuts(
+      shortcuts: <LogicalKeySet, Intent>{
+        LogicalKeySet(LogicalKeyboardKey.control, LogicalKeyboardKey.keyO): const _OpenIntent(),
+        LogicalKeySet(LogicalKeyboardKey.control, LogicalKeyboardKey.keyF): const _FindIntent(),
+        LogicalKeySet(LogicalKeyboardKey.control, LogicalKeyboardKey.keyP): const _PrintIntent(),
+        LogicalKeySet(LogicalKeyboardKey.control, LogicalKeyboardKey.keyS): const _SaveIntent(),
+        LogicalKeySet(LogicalKeyboardKey.control, LogicalKeyboardKey.equal): const _ZoomInIntent(),
+        LogicalKeySet(LogicalKeyboardKey.control, LogicalKeyboardKey.minus): const _ZoomOutIntent(),
+        LogicalKeySet(LogicalKeyboardKey.control, LogicalKeyboardKey.digit0): const _ResetZoomIntent(),
+        LogicalKeySet(LogicalKeyboardKey.escape): const _EscapeIntent(),
+      },
+      child: Actions(
+        actions: <Type, Action<Intent>>{
+          _OpenIntent: CallbackAction<_OpenIntent>(onInvoke: (_) { state.pickAndImport(); return null; }),
+          _FindIntent: CallbackAction<_FindIntent>(onInvoke: (_) { state.readerSearchFocusNode.requestFocus(); return null; }),
+          _PrintIntent: CallbackAction<_PrintIntent>(onInvoke: (_) { state.printSelected(); return null; }),
+          _SaveIntent: CallbackAction<_SaveIntent>(onInvoke: (_) { state.saveLastPage(state.currentPage); return null; }),
+          _ZoomInIntent: CallbackAction<_ZoomInIntent>(onInvoke: (_) { state.zoomBy(.1); return null; }),
+          _ZoomOutIntent: CallbackAction<_ZoomOutIntent>(onInvoke: (_) { state.zoomBy(-.1); return null; }),
+          _ResetZoomIntent: CallbackAction<_ResetZoomIntent>(onInvoke: (_) { state.resetZoom(); return null; }),
+          _EscapeIntent: CallbackAction<_EscapeIntent>(onInvoke: (_) { if (state.readerFullScreen) state.toggleReaderFullScreen(); return null; }),
+        },
+        child: Scaffold(
+          body: SafeArea(
+            child: state.readerFullScreen
+                ? WorkspacePage(state: state)
+                : Row(
+                    children: [
+                      _Sidebar(state: state),
+                      Expanded(
+                        child: Column(
+                          children: [
+                            _TopBar(state: state),
+                            Expanded(child: _Content(state: state)),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+          ),
         ),
       ),
     );
   }
 }
+
+class _OpenIntent extends Intent { const _OpenIntent(); }
+class _FindIntent extends Intent { const _FindIntent(); }
+class _PrintIntent extends Intent { const _PrintIntent(); }
+class _SaveIntent extends Intent { const _SaveIntent(); }
+class _ZoomInIntent extends Intent { const _ZoomInIntent(); }
+class _ZoomOutIntent extends Intent { const _ZoomOutIntent(); }
+class _ResetZoomIntent extends Intent { const _ResetZoomIntent(); }
+class _EscapeIntent extends Intent { const _EscapeIntent(); }
 
 class _Sidebar extends StatelessWidget {
   const _Sidebar({required this.state});

@@ -7,6 +7,7 @@ class PdfDocumentModel {
     required this.pages,
     required this.updated,
     this.favorite = false,
+    this.lastPage = 1,
   });
 
   final String name;
@@ -14,6 +15,7 @@ class PdfDocumentModel {
   final int pages;
   final String updated;
   final bool favorite;
+  final int lastPage;
 
   factory PdfDocumentModel.fromJson(Map<dynamic, dynamic> json) => PdfDocumentModel(
         name: json['title'] as String? ?? (json['path'] as String).split(RegExp(r'[/\\]')).last,
@@ -21,14 +23,16 @@ class PdfDocumentModel {
         pages: (json['pageCount'] as num?)?.toInt() ?? 0,
         updated: json['updatedAt'] as String? ?? '',
         favorite: json['favorite'] as bool? ?? false,
+        lastPage: (json['lastPage'] as num?)?.toInt() ?? 1,
       );
 
-  PdfDocumentModel copyWith({bool? favorite}) => PdfDocumentModel(
+  PdfDocumentModel copyWith({bool? favorite, int? lastPage}) => PdfDocumentModel(
         name: name,
         path: path,
         pages: pages,
         updated: updated,
         favorite: favorite ?? this.favorite,
+        lastPage: lastPage ?? this.lastPage,
       );
 }
 
@@ -40,14 +44,29 @@ class PdfPageModel {
 }
 
 class PdfDocumentDetails {
-  const PdfDocumentDetails({required this.pageCount, required this.pages});
+  const PdfDocumentDetails({
+    required this.pageCount,
+    required this.pages,
+    this.title,
+    this.author,
+    this.fileSizeBytes,
+    this.encrypted = false,
+  });
 
   final int pageCount;
   final List<PdfPageModel> pages;
+  final String? title;
+  final String? author;
+  final int? fileSizeBytes;
+  final bool encrypted;
 
   factory PdfDocumentDetails.fromJson(Map<dynamic, dynamic> info, Map<dynamic, dynamic> extracted) =>
       PdfDocumentDetails(
         pageCount: (info['pageCount'] as num?)?.toInt() ?? 0,
+        title: info['title'] as String?,
+        author: info['author'] as String?,
+        fileSizeBytes: (info['fileSizeBytes'] as num?)?.toInt(),
+        encrypted: info['encrypted'] as bool? ?? false,
         pages: ((extracted['pages'] as List<dynamic>? ?? const [])
             .cast<Map<dynamic, dynamic>>())
             .map((page) => PdfPageModel(
@@ -56,6 +75,7 @@ class PdfDocumentDetails {
                 ))
             .toList(),
       );
+}
 
 class ChatMessage {
   const ChatMessage({

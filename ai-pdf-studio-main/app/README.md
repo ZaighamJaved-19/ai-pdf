@@ -1,8 +1,8 @@
 # AI PDF Studio Flutter app
 
-This directory contains the professional Flutter workspace UI. It is intentionally
-dependency-light and currently uses an in-memory state store so the screens can be
-reviewed before wiring the JSON-RPC sidecar.
+This directory contains the professional Flutter workspace UI. Documents, reading
+positions, favorites, PDF inspection, and AI chat are backed by the authenticated
+JSON-RPC sidecar.
 
 ## Run on Windows
 
@@ -17,9 +17,8 @@ flutter run -d windows
 ```
 
 The generated Windows runner is machine-specific and is not committed here. The
-OpenAI API key field is a local UI setting; production wiring should store it in
-Windows Credential Manager and pass it to the Python sidecar only for a consented
-request.
+OpenAI API key field is held for the current app session and passed to the Python
+sidecar only for a consented request.
 
 ## Sidecar
 

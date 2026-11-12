@@ -183,6 +183,10 @@ class SidecarServer:
 
     def _library_upsert(self, params: dict[str, Any], _: Any) -> dict[str, Any]:
         path = Path(str(params["path"])).expanduser().resolve()
+        if not path.is_file():
+            raise RpcFailure(-32010, "PDF file does not exist.", {"kind": "FileNotFound"})
+        if path.suffix.lower() != ".pdf":
+            raise RpcFailure(-32011, "Selected file is not a PDF.", {"kind": "NotAPdf"})
         record = self._database.upsert(
             path,
             title=params.get("title"),

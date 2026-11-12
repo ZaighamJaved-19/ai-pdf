@@ -1,6 +1,9 @@
 import 'dart:async';
+import 'dart:io';
 
+import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
+import 'package:printing/printing.dart';
 
 import 'di/container.dart';
 import 'models.dart';
@@ -17,6 +20,9 @@ class AppState extends ChangeNotifier {
   PdfDocumentDetails? selectedDetails;
   String activeTool = 'Reader';
   bool chatOpen = true;
+  bool readerFullScreen = false;
+  double readerZoom = 1;
+  int currentPage = 1;
   bool isProcessing = false;
   bool isLoading = true;
   String? errorMessage;
@@ -24,9 +30,13 @@ class AppState extends ChangeNotifier {
   String model = 'gpt-4o-mini';
   String apiKey = '';
   final searchController = TextEditingController();
+  final readerSearchFocusNode = FocusNode();
   final chatController = TextEditingController();
   List<PdfDocumentModel> documents = const [];
+  final openDocuments = <PdfDocumentModel>[];
+  PdfDocumentModel? get activeTab => selectedDocument;
   final chatMessages = <ChatMessage>[];
+  final bookmarks = <int>{};
 
   Future<void> _initialize() async {
     try {
@@ -58,12 +68,88 @@ class AppState extends ChangeNotifier {
 
   Future<void> selectDocument(PdfDocumentModel document) async {
     selectedDocument = document;
+    if (!openDocuments.any((item) => item.path == document.path)) {
+      openDocuments.add(document);
+    }
     selectedDetails = null;
     navigationIndex = 0;
     errorMessage = null;
     notifyListeners();
     try {
       selectedDetails = await container.documents.open(document);
+      currentPage = selectedDetails!.pageCount > 0
+          ? document.lastPage.clamp(1, selectedDetails!.pageCount).toInt()
+          : 1;
+    } catch (error) {
+      errorMessage = error.toString();
+    }
+    notifyListeners();
+  }
+
+  Future<void> pickAndImport() async {
+    final result = await FilePicker.platform.pickFiles(
+      allowMultiple: false,
+      type: FileType.custom,
+      allowedExtensions: const ['pdf'],
+    );
+    final file = result?.files.single;
+    if (file != null && file.path != null) await importDocument(file.path!);
+  }
+
+  void closeTab(PdfDocumentModel document) {
+    final index = openDocuments.indexWhere((item) => item.path == document.path);
+    if (index < 0) return;
+    openDocuments.removeAt(index);
+    if (selectedDocument?.path == document.path) {
+      selectedDocument = openDocuments.isEmpty ? null : openDocuments[index == 0 ? 0 : index - 1];
+      selectedDetails = null;
+      if (selectedDocument != null) unawaited(selectDocument(selectedDocument!));
+    }
+    notifyListeners();
+  }
+
+  void selectTab(PdfDocumentModel document) {
+    unawaited(selectDocument(document));
+  }
+
+  void toggleReaderFullScreen() {
+    readerFullScreen = !readerFullScreen;
+    notifyListeners();
+  }
+
+  void zoomBy(double amount) {
+    readerZoom = (readerZoom + amount).clamp(.5, 4).toDouble();
+    notifyListeners();
+  }
+
+  void resetZoom() {
+    readerZoom = 1;
+    notifyListeners();
+  }
+
+  Future<void> printSelected() async {
+    final document = selectedDocument;
+    if (document == null) return;
+    final bytes = await File(document.path).readAsBytes();
+    await Printing.layoutPdf(onLayout: (_) async => bytes);
+  }
+
+  Future<void> saveLastPage(int pageNumber) async {
+    final document = selectedDocument;
+    if (document == null || pageNumber < 1 || document.lastPage == pageNumber) return;
+    final updated = document.copyWith(lastPage: pageNumber);
+    selectedDocument = updated;
+    final index = documents.indexWhere((item) => item.path == document.path);
+    if (index >= 0) documents[index] = updated;
+    final tabIndex = openDocuments.indexWhere((item) => item.path == document.path);
+    if (tabIndex >= 0) openDocuments[tabIndex] = updated;
+    try {
+      await container.sidecar.request('library.upsert', {
+        'path': document.path,
+        'title': document.name,
+        'lastPage': pageNumber,
+        'favorite': document.favorite,
+      });
     } catch (error) {
       errorMessage = error.toString();
     }
@@ -153,6 +239,7 @@ class AppState extends ChangeNotifier {
   void dispose() {
     searchController.dispose();
     chatController.dispose();
+    readerSearchFocusNode.dispose();
     unawaited(container.dispose());
     super.dispose();
   }

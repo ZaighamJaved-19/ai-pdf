@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:desktop_drop/desktop_drop.dart';
 
 import '../app_state.dart';
 import '../models.dart';
@@ -18,9 +19,17 @@ class LibraryPage extends StatelessWidget {
             return true;
           }).toList()
         : state.documents;
-    return Padding(
-      padding: const EdgeInsets.all(28),
-      child: Column(
+    return DropTarget(
+      onDragDone: (detail) {
+        for (final file in detail.files) {
+          if (file.path.toLowerCase().endsWith('.pdf')) {
+            state.importDocument(file.path);
+          }
+        }
+      },
+      child: Padding(
+        padding: const EdgeInsets.all(28),
+        child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Row(
@@ -39,7 +48,7 @@ class LibraryPage extends StatelessWidget {
                 ),
               ),
               FilledButton.icon(
-                onPressed: () => _showImportDialog(context),
+                onPressed: state.pickAndImport,
                 icon: const Icon(Icons.add, size: 18),
                 label: const Text('Import PDF'),
               ),
@@ -69,31 +78,9 @@ class LibraryPage extends StatelessWidget {
             ),
           ),
         ],
-      ),
-    );
-  }
-
-  Future<void> _showImportDialog(BuildContext context) async {
-    final controller = TextEditingController();
-    final path = await showDialog<String>(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Import PDF'),
-        content: TextField(
-          controller: controller,
-          autofocus: true,
-          decoration: const InputDecoration(labelText: 'Full path to PDF'),
         ),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(context), child: const Text('Cancel')),
-          FilledButton(onPressed: () => Navigator.pop(context, controller.text.trim()), child: const Text('Import')),
-        ],
       ),
     );
-    controller.dispose();
-    if (path != null && path.isNotEmpty) {
-      await state.importDocument(path);
-    }
   }
 }
 
