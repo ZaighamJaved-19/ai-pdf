@@ -1,0 +1,2843 @@
+{
+ "openrpc": "1.3.2",
+ "info": {
+  "title": "AI PDF Studio sidecar API",
+  "version": "1.0.0-draft.1",
+  "description": "JSON-RPC 2.0 over stdio, newline-delimited UTF-8 JSON. stdout = protocol only; stderr = scrubbed logs. Notifications: job.progress (ProgressNotification), chat.delta (StreamDelta), job.finished (JobResult). Every error response carries data: ErrorData. Methods with x-job=true return a JobId immediately and finish via job.finished; cancel with job.cancel. x-network tags drive the UI's offline/online label."
+ },
+ "methods": [
+  {
+   "name": "system.handshake",
+   "summary": "Negotiate contract version and discover capabilities.",
+   "params": [
+    {
+     "name": "clientContractVersion",
+     "required": true,
+     "schema": {
+      "type": "string"
+     }
+    }
+   ],
+   "result": {
+    "name": "result",
+    "schema": {
+     "type": "object",
+     "properties": {
+      "contractVersion": {
+       "type": "string"
+      },
+      "sidecarVersion": {
+       "type": "string"
+      },
+      "capabilities": {
+       "$ref": "#/components/schemas/Capabilities"
+      }
+     },
+     "additionalProperties": false,
+     "required": [
+      "contractVersion",
+      "sidecarVersion",
+      "capabilities"
+     ]
+    }
+   },
+   "errors": [
+    {
+     "$ref": "#/components/errors/VersionMismatch"
+    }
+   ],
+   "x-network": "none",
+   "x-job": false
+  },
+  {
+   "name": "system.health",
+   "summary": "Liveness probe.",
+   "params": [],
+   "result": {
+    "name": "result",
+    "schema": {
+     "type": "object",
+     "properties": {
+      "ok": {
+       "type": "boolean"
+      },
+      "uptimeSeconds": {
+       "type": "number"
+      },
+      "activeJobs": {
+       "type": "integer"
+      }
+     },
+     "additionalProperties": false,
+     "required": [
+      "ok",
+      "uptimeSeconds",
+      "activeJobs"
+     ]
+    }
+   },
+   "errors": [],
+   "x-network": "none",
+   "x-job": false
+  },
+  {
+   "name": "system.shutdown",
+   "summary": "Graceful shutdown; sidecar also exits on stdin EOF.",
+   "params": [],
+   "result": {
+    "name": "result",
+    "schema": {
+     "type": "object",
+     "properties": {
+      "ok": {
+       "type": "boolean"
+      }
+     },
+     "additionalProperties": false,
+     "required": [
+      "ok"
+     ]
+    }
+   },
+   "errors": [],
+   "x-network": "none",
+   "x-job": false
+  },
+  {
+   "name": "job.cancel",
+   "summary": "Cancel a running job. Idempotent.",
+   "params": [
+    {
+     "name": "jobId",
+     "required": true,
+     "schema": {
+      "$ref": "#/components/schemas/JobId"
+     }
+    }
+   ],
+   "result": {
+    "name": "result",
+    "schema": {
+     "type": "object",
+     "properties": {
+      "cancelled": {
+       "type": "boolean"
+      }
+     },
+     "additionalProperties": false,
+     "required": [
+      "cancelled"
+     ]
+    }
+   },
+   "errors": [],
+   "x-network": "none",
+   "x-job": false
+  },
+  {
+   "name": "job.result",
+   "summary": "Fetch the final result of a job (also delivered as notification job.finished).",
+   "params": [
+    {
+     "name": "jobId",
+     "required": true,
+     "schema": {
+      "$ref": "#/components/schemas/JobId"
+     }
+    }
+   ],
+   "result": {
+    "name": "result",
+    "schema": {
+     "$ref": "#/components/schemas/JobResult"
+    }
+   },
+   "errors": [
+    {
+     "$ref": "#/components/errors/UnknownJob"
+    }
+   ],
+   "x-network": "none",
+   "x-job": false
+  },
+  {
+   "name": "pdf.inspect",
+   "summary": "Metadata, page count, encryption, scanned-likely detection.",
+   "params": [
+    {
+     "name": "path",
+     "required": true,
+     "schema": {
+      "$ref": "#/components/schemas/Path"
+     }
+    },
+    {
+     "name": "password",
+     "required": false,
+     "schema": {
+      "$ref": "#/components/schemas/Password"
+     }
+    }
+   ],
+   "result": {
+    "name": "result",
+    "schema": {
+     "$ref": "#/components/schemas/PdfDocumentInfo"
+    }
+   },
+   "errors": [
+    {
+     "$ref": "#/components/errors/FileNotFound"
+    },
+    {
+     "$ref": "#/components/errors/NotAPdf"
+    },
+    {
+     "$ref": "#/components/errors/Corrupt"
+    },
+    {
+     "$ref": "#/components/errors/PasswordRequired"
+    },
+    {
+     "$ref": "#/components/errors/WrongPassword"
+    },
+    {
+     "$ref": "#/components/errors/TooLarge"
+    },
+    {
+     "$ref": "#/components/errors/Timeout"
+    }
+   ],
+   "x-network": "none",
+   "x-job": false
+  },
+  {
+   "name": "pdf.extractText",
+   "summary": "Page-aware text extraction.",
+   "params": [
+    {
+     "name": "path",
+     "required": true,
+     "schema": {
+      "$ref": "#/components/schemas/Path"
+     }
+    },
+    {
+     "name": "password",
+     "required": false,
+     "schema": {
+      "$ref": "#/components/schemas/Password"
+     }
+    },
+    {
+     "name": "pages",
+     "required": false,
+     "schema": {
+      "$ref": "#/components/schemas/PageRange"
+     }
+    }
+   ],
+   "result": {
+    "name": "result",
+    "schema": {
+     "type": "object",
+     "properties": {
+      "pages": {
+       "type": "array",
+       "items": {
+        "$ref": "#/components/schemas/PageText"
+       }
+      }
+     },
+     "additionalProperties": false,
+     "required": [
+      "pages"
+     ]
+    }
+   },
+   "errors": [
+    {
+     "$ref": "#/components/errors/FileNotFound"
+    },
+    {
+     "$ref": "#/components/errors/NotAPdf"
+    },
+    {
+     "$ref": "#/components/errors/Corrupt"
+    },
+    {
+     "$ref": "#/components/errors/PasswordRequired"
+    },
+    {
+     "$ref": "#/components/errors/WrongPassword"
+    },
+    {
+     "$ref": "#/components/errors/TooLarge"
+    },
+    {
+     "$ref": "#/components/errors/Timeout"
+    }
+   ],
+   "x-network": "none",
+   "x-job": false
+  },
+  {
+   "name": "pdf.unlock",
+   "summary": "Write a decrypted copy given the password. Original untouched.",
+   "params": [
+    {
+     "name": "path",
+     "required": true,
+     "schema": {
+      "$ref": "#/components/schemas/Path"
+     }
+    },
+    {
+     "name": "password",
+     "required": true,
+     "schema": {
+      "$ref": "#/components/schemas/Password"
+     }
+    },
+    {
+     "name": "outputPath",
+     "required": true,
+     "schema": {
+      "$ref": "#/components/schemas/Path"
+     }
+    }
+   ],
+   "result": {
+    "name": "result",
+    "schema": {
+     "$ref": "#/components/schemas/JobResult"
+    }
+   },
+   "errors": [
+    {
+     "$ref": "#/components/errors/FileNotFound"
+    },
+    {
+     "$ref": "#/components/errors/NotAPdf"
+    },
+    {
+     "$ref": "#/components/errors/Corrupt"
+    },
+    {
+     "$ref": "#/components/errors/PasswordRequired"
+    },
+    {
+     "$ref": "#/components/errors/WrongPassword"
+    },
+    {
+     "$ref": "#/components/errors/TooLarge"
+    },
+    {
+     "$ref": "#/components/errors/Timeout"
+    }
+   ],
+   "x-network": "none",
+   "x-job": false
+  },
+  {
+   "name": "pdf.merge",
+   "summary": "Merge PDFs in order.",
+   "params": [
+    {
+     "name": "inputs",
+     "required": true,
+     "schema": {
+      "type": "array",
+      "items": {
+       "type": "object",
+       "properties": {
+        "path": {
+         "$ref": "#/components/schemas/Path"
+        },
+        "password": {
+         "$ref": "#/components/schemas/Password"
+        },
+        "pages": {
+         "$ref": "#/components/schemas/PageRange"
+        }
+       },
+       "additionalProperties": false,
+       "required": [
+        "path"
+       ]
+      }
+     }
+    },
+    {
+     "name": "outputPath",
+     "required": true,
+     "schema": {
+      "$ref": "#/components/schemas/Path"
+     }
+    }
+   ],
+   "result": {
+    "name": "result",
+    "schema": {
+     "$ref": "#/components/schemas/JobStarted"
+    }
+   },
+   "errors": [
+    {
+     "$ref": "#/components/errors/FileNotFound"
+    },
+    {
+     "$ref": "#/components/errors/NotAPdf"
+    },
+    {
+     "$ref": "#/components/errors/Corrupt"
+    },
+    {
+     "$ref": "#/components/errors/PasswordRequired"
+    },
+    {
+     "$ref": "#/components/errors/WrongPassword"
+    },
+    {
+     "$ref": "#/components/errors/TooLarge"
+    },
+    {
+     "$ref": "#/components/errors/Timeout"
+    }
+   ],
+   "x-network": "none",
+   "x-job": true
+  },
+  {
+   "name": "pdf.split",
+   "summary": "Split by ranges or every N pages.",
+   "params": [
+    {
+     "name": "path",
+     "required": true,
+     "schema": {
+      "$ref": "#/components/schemas/Path"
+     }
+    },
+    {
+     "name": "mode",
+     "required": true,
+     "schema": {
+      "type": "string",
+      "enum": [
+       "ranges",
+       "every_n",
+       "bookmarks"
+      ]
+     }
+    },
+    {
+     "name": "ranges",
+     "required": false,
+     "schema": {
+      "type": "array",
+      "items": {
+       "$ref": "#/components/schemas/PageRange"
+      }
+     }
+    },
+    {
+     "name": "everyN",
+     "required": false,
+     "schema": {
+      "type": "integer"
+     }
+    },
+    {
+     "name": "outputDir",
+     "required": true,
+     "schema": {
+      "$ref": "#/components/schemas/Path"
+     }
+    }
+   ],
+   "result": {
+    "name": "result",
+    "schema": {
+     "$ref": "#/components/schemas/JobStarted"
+    }
+   },
+   "errors": [
+    {
+     "$ref": "#/components/errors/FileNotFound"
+    },
+    {
+     "$ref": "#/components/errors/NotAPdf"
+    },
+    {
+     "$ref": "#/components/errors/Corrupt"
+    },
+    {
+     "$ref": "#/components/errors/PasswordRequired"
+    },
+    {
+     "$ref": "#/components/errors/WrongPassword"
+    },
+    {
+     "$ref": "#/components/errors/TooLarge"
+    },
+    {
+     "$ref": "#/components/errors/Timeout"
+    }
+   ],
+   "x-network": "none",
+   "x-job": true
+  },
+  {
+   "name": "pdf.pageOps",
+   "summary": "Rotate, delete, reorder, duplicate, extract, insert blank pages; writes a new file.",
+   "params": [
+    {
+     "name": "path",
+     "required": true,
+     "schema": {
+      "$ref": "#/components/schemas/Path"
+     }
+    },
+    {
+     "name": "password",
+     "required": false,
+     "schema": {
+      "$ref": "#/components/schemas/Password"
+     }
+    },
+    {
+     "name": "outputPath",
+     "required": true,
+     "schema": {
+      "$ref": "#/components/schemas/Path"
+     }
+    },
+    {
+     "name": "operations",
+     "required": true,
+     "schema": {
+      "type": "array",
+      "items": {
+       "type": "object",
+       "properties": {
+        "op": {
+         "type": "string",
+         "enum": [
+          "rotate",
+          "delete",
+          "reorder",
+          "duplicate",
+          "extract",
+          "insert_blank",
+          "crop"
+         ]
+        },
+        "pages": {
+         "$ref": "#/components/schemas/PageRange"
+        },
+        "degrees": {
+         "type": "string",
+         "enum": [
+          "90",
+          "180",
+          "270"
+         ]
+        },
+        "order": {
+         "type": "array",
+         "items": {
+          "type": "integer"
+         }
+        },
+        "after": {
+         "type": "integer"
+        },
+        "box": {
+         "type": "array",
+         "items": {
+          "type": "number"
+         }
+        }
+       },
+       "additionalProperties": false,
+       "required": [
+        "op"
+       ]
+      }
+     }
+    }
+   ],
+   "result": {
+    "name": "result",
+    "schema": {
+     "$ref": "#/components/schemas/JobStarted"
+    }
+   },
+   "errors": [
+    {
+     "$ref": "#/components/errors/FileNotFound"
+    },
+    {
+     "$ref": "#/components/errors/NotAPdf"
+    },
+    {
+     "$ref": "#/components/errors/Corrupt"
+    },
+    {
+     "$ref": "#/components/errors/PasswordRequired"
+    },
+    {
+     "$ref": "#/components/errors/WrongPassword"
+    },
+    {
+     "$ref": "#/components/errors/TooLarge"
+    },
+    {
+     "$ref": "#/components/errors/Timeout"
+    }
+   ],
+   "x-network": "none",
+   "x-job": true
+  },
+  {
+   "name": "pdf.compress",
+   "summary": "Lossless-first compression with optional image downsampling; reports real before/after size.",
+   "params": [
+    {
+     "name": "path",
+     "required": true,
+     "schema": {
+      "$ref": "#/components/schemas/Path"
+     }
+    },
+    {
+     "name": "password",
+     "required": false,
+     "schema": {
+      "$ref": "#/components/schemas/Password"
+     }
+    },
+    {
+     "name": "outputPath",
+     "required": true,
+     "schema": {
+      "$ref": "#/components/schemas/Path"
+     }
+    },
+    {
+     "name": "level",
+     "required": true,
+     "schema": {
+      "type": "string",
+      "enum": [
+       "basic",
+       "balanced",
+       "strong"
+      ]
+     }
+    }
+   ],
+   "result": {
+    "name": "result",
+    "schema": {
+     "$ref": "#/components/schemas/JobStarted"
+    }
+   },
+   "errors": [
+    {
+     "$ref": "#/components/errors/FileNotFound"
+    },
+    {
+     "$ref": "#/components/errors/NotAPdf"
+    },
+    {
+     "$ref": "#/components/errors/Corrupt"
+    },
+    {
+     "$ref": "#/components/errors/PasswordRequired"
+    },
+    {
+     "$ref": "#/components/errors/WrongPassword"
+    },
+    {
+     "$ref": "#/components/errors/TooLarge"
+    },
+    {
+     "$ref": "#/components/errors/Timeout"
+    }
+   ],
+   "x-network": "none",
+   "x-job": true
+  },
+  {
+   "name": "pdf.annotate",
+   "summary": "Write standard PDF annotations (highlight, underline, strike, note, ink, shape, text, stamp).",
+   "params": [
+    {
+     "name": "path",
+     "required": true,
+     "schema": {
+      "$ref": "#/components/schemas/Path"
+     }
+    },
+    {
+     "name": "outputPath",
+     "required": true,
+     "schema": {
+      "$ref": "#/components/schemas/Path"
+     }
+    },
+    {
+     "name": "annotations",
+     "required": true,
+     "schema": {
+      "type": "array",
+      "items": {
+       "type": "object"
+      }
+     }
+    }
+   ],
+   "result": {
+    "name": "result",
+    "schema": {
+     "$ref": "#/components/schemas/JobStarted"
+    }
+   },
+   "errors": [
+    {
+     "$ref": "#/components/errors/FileNotFound"
+    },
+    {
+     "$ref": "#/components/errors/NotAPdf"
+    },
+    {
+     "$ref": "#/components/errors/Corrupt"
+    },
+    {
+     "$ref": "#/components/errors/PasswordRequired"
+    },
+    {
+     "$ref": "#/components/errors/WrongPassword"
+    },
+    {
+     "$ref": "#/components/errors/TooLarge"
+    },
+    {
+     "$ref": "#/components/errors/Timeout"
+    }
+   ],
+   "x-network": "none",
+   "x-job": true
+  },
+  {
+   "name": "pdf.stamp",
+   "summary": "Page numbers, headers/footers, watermark, signature image.",
+   "params": [
+    {
+     "name": "path",
+     "required": true,
+     "schema": {
+      "$ref": "#/components/schemas/Path"
+     }
+    },
+    {
+     "name": "outputPath",
+     "required": true,
+     "schema": {
+      "$ref": "#/components/schemas/Path"
+     }
+    },
+    {
+     "name": "stamps",
+     "required": true,
+     "schema": {
+      "type": "array",
+      "items": {
+       "type": "object"
+      }
+     }
+    }
+   ],
+   "result": {
+    "name": "result",
+    "schema": {
+     "$ref": "#/components/schemas/JobStarted"
+    }
+   },
+   "errors": [
+    {
+     "$ref": "#/components/errors/FileNotFound"
+    },
+    {
+     "$ref": "#/components/errors/NotAPdf"
+    },
+    {
+     "$ref": "#/components/errors/Corrupt"
+    },
+    {
+     "$ref": "#/components/errors/PasswordRequired"
+    },
+    {
+     "$ref": "#/components/errors/WrongPassword"
+    },
+    {
+     "$ref": "#/components/errors/TooLarge"
+    },
+    {
+     "$ref": "#/components/errors/Timeout"
+    }
+   ],
+   "x-network": "none",
+   "x-job": true
+  },
+  {
+   "name": "pdf.encrypt",
+   "summary": "Password protect / set permissions (AES-256).",
+   "params": [
+    {
+     "name": "path",
+     "required": true,
+     "schema": {
+      "$ref": "#/components/schemas/Path"
+     }
+    },
+    {
+     "name": "outputPath",
+     "required": true,
+     "schema": {
+      "$ref": "#/components/schemas/Path"
+     }
+    },
+    {
+     "name": "userPassword",
+     "required": false,
+     "schema": {
+      "$ref": "#/components/schemas/Password"
+     }
+    },
+    {
+     "name": "ownerPassword",
+     "required": true,
+     "schema": {
+      "$ref": "#/components/schemas/Password"
+     }
+    },
+    {
+     "name": "permissions",
+     "required": false,
+     "schema": {
+      "type": "array",
+      "items": {
+       "type": "string"
+      }
+     }
+    }
+   ],
+   "result": {
+    "name": "result",
+    "schema": {
+     "$ref": "#/components/schemas/JobStarted"
+    }
+   },
+   "errors": [
+    {
+     "$ref": "#/components/errors/FileNotFound"
+    },
+    {
+     "$ref": "#/components/errors/NotAPdf"
+    },
+    {
+     "$ref": "#/components/errors/Corrupt"
+    },
+    {
+     "$ref": "#/components/errors/PasswordRequired"
+    },
+    {
+     "$ref": "#/components/errors/WrongPassword"
+    },
+    {
+     "$ref": "#/components/errors/TooLarge"
+    },
+    {
+     "$ref": "#/components/errors/Timeout"
+    }
+   ],
+   "x-network": "none",
+   "x-job": true
+  },
+  {
+   "name": "pdf.sign",
+   "summary": "Create a digital signature (PKCS#12 supplied by user).",
+   "params": [
+    {
+     "name": "path",
+     "required": true,
+     "schema": {
+      "$ref": "#/components/schemas/Path"
+     }
+    },
+    {
+     "name": "outputPath",
+     "required": true,
+     "schema": {
+      "$ref": "#/components/schemas/Path"
+     }
+    },
+    {
+     "name": "pkcs12Path",
+     "required": true,
+     "schema": {
+      "$ref": "#/components/schemas/Path"
+     }
+    },
+    {
+     "name": "pkcs12Password",
+     "required": true,
+     "schema": {
+      "$ref": "#/components/schemas/Password"
+     }
+    },
+    {
+     "name": "page",
+     "required": true,
+     "schema": {
+      "type": "integer"
+     }
+    },
+    {
+     "name": "box",
+     "required": true,
+     "schema": {
+      "type": "array",
+      "items": {
+       "type": "number"
+      }
+     }
+    }
+   ],
+   "result": {
+    "name": "result",
+    "schema": {
+     "$ref": "#/components/schemas/JobStarted"
+    }
+   },
+   "errors": [
+    {
+     "$ref": "#/components/errors/FileNotFound"
+    },
+    {
+     "$ref": "#/components/errors/NotAPdf"
+    },
+    {
+     "$ref": "#/components/errors/Corrupt"
+    },
+    {
+     "$ref": "#/components/errors/PasswordRequired"
+    },
+    {
+     "$ref": "#/components/errors/WrongPassword"
+    },
+    {
+     "$ref": "#/components/errors/TooLarge"
+    },
+    {
+     "$ref": "#/components/errors/Timeout"
+    }
+   ],
+   "x-network": "none",
+   "x-job": true
+  },
+  {
+   "name": "pdf.verifySignatures",
+   "summary": "Validate signatures; reports trust honestly (valid/invalid/unknown-trust).",
+   "params": [
+    {
+     "name": "path",
+     "required": true,
+     "schema": {
+      "$ref": "#/components/schemas/Path"
+     }
+    }
+   ],
+   "result": {
+    "name": "result",
+    "schema": {
+     "type": "object",
+     "properties": {
+      "signatures": {
+       "type": "array",
+       "items": {
+        "type": "object"
+       }
+      }
+     },
+     "additionalProperties": false,
+     "required": [
+      "signatures"
+     ]
+    }
+   },
+   "errors": [
+    {
+     "$ref": "#/components/errors/FileNotFound"
+    },
+    {
+     "$ref": "#/components/errors/NotAPdf"
+    },
+    {
+     "$ref": "#/components/errors/Corrupt"
+    },
+    {
+     "$ref": "#/components/errors/PasswordRequired"
+    },
+    {
+     "$ref": "#/components/errors/WrongPassword"
+    },
+    {
+     "$ref": "#/components/errors/TooLarge"
+    },
+    {
+     "$ref": "#/components/errors/Timeout"
+    }
+   ],
+   "x-network": "none",
+   "x-job": false
+  },
+  {
+   "name": "redaction.apply",
+   "summary": "True redaction with mandatory verification. Fails the job if redacted text is still extractable.",
+   "params": [
+    {
+     "name": "path",
+     "required": true,
+     "schema": {
+      "$ref": "#/components/schemas/Path"
+     }
+    },
+    {
+     "name": "password",
+     "required": false,
+     "schema": {
+      "$ref": "#/components/schemas/Password"
+     }
+    },
+    {
+     "name": "outputPath",
+     "required": true,
+     "schema": {
+      "$ref": "#/components/schemas/Path"
+     }
+    },
+    {
+     "name": "regions",
+     "required": true,
+     "schema": {
+      "type": "array",
+      "items": {
+       "type": "object",
+       "properties": {
+        "page": {
+         "type": "integer"
+        },
+        "box": {
+         "type": "array",
+         "items": {
+          "type": "number"
+         }
+        }
+       },
+       "additionalProperties": false,
+       "required": [
+        "page",
+        "box"
+       ]
+      }
+     }
+    },
+    {
+     "name": "searchTerms",
+     "required": false,
+     "schema": {
+      "type": "array",
+      "items": {
+       "type": "string"
+      }
+     }
+    },
+    {
+     "name": "mode",
+     "required": true,
+     "schema": {
+      "type": "string",
+      "enum": [
+       "rasterize",
+       "content_stream"
+      ]
+     }
+    },
+    {
+     "name": "scrubMetadata",
+     "required": false,
+     "schema": {
+      "type": "boolean"
+     }
+    },
+    {
+     "name": "reOcr",
+     "required": false,
+     "schema": {
+      "type": "boolean"
+     }
+    }
+   ],
+   "result": {
+    "name": "result",
+    "schema": {
+     "$ref": "#/components/schemas/JobStarted"
+    }
+   },
+   "errors": [
+    {
+     "$ref": "#/components/errors/FileNotFound"
+    },
+    {
+     "$ref": "#/components/errors/NotAPdf"
+    },
+    {
+     "$ref": "#/components/errors/Corrupt"
+    },
+    {
+     "$ref": "#/components/errors/PasswordRequired"
+    },
+    {
+     "$ref": "#/components/errors/WrongPassword"
+    },
+    {
+     "$ref": "#/components/errors/TooLarge"
+    },
+    {
+     "$ref": "#/components/errors/Timeout"
+    },
+    {
+     "$ref": "#/components/errors/RedactionVerificationFailed"
+    }
+   ],
+   "x-network": "none",
+   "x-job": true
+  },
+  {
+   "name": "ocr.detect",
+   "summary": "Is this PDF scanned? Per-page text-layer coverage.",
+   "params": [
+    {
+     "name": "path",
+     "required": true,
+     "schema": {
+      "$ref": "#/components/schemas/Path"
+     }
+    },
+    {
+     "name": "password",
+     "required": false,
+     "schema": {
+      "$ref": "#/components/schemas/Password"
+     }
+    }
+   ],
+   "result": {
+    "name": "result",
+    "schema": {
+     "type": "object",
+     "properties": {
+      "scannedLikely": {
+       "type": "boolean"
+      },
+      "pagesWithoutText": {
+       "type": "array",
+       "items": {
+        "type": "integer"
+       }
+      }
+     },
+     "additionalProperties": false,
+     "required": [
+      "scannedLikely",
+      "pagesWithoutText"
+     ]
+    }
+   },
+   "errors": [
+    {
+     "$ref": "#/components/errors/FileNotFound"
+    },
+    {
+     "$ref": "#/components/errors/NotAPdf"
+    },
+    {
+     "$ref": "#/components/errors/Corrupt"
+    },
+    {
+     "$ref": "#/components/errors/PasswordRequired"
+    },
+    {
+     "$ref": "#/components/errors/WrongPassword"
+    },
+    {
+     "$ref": "#/components/errors/TooLarge"
+    },
+    {
+     "$ref": "#/components/errors/Timeout"
+    }
+   ],
+   "x-network": "none",
+   "x-job": false
+  },
+  {
+   "name": "ocr.run",
+   "summary": "OCR to searchable PDF and/or text. Cancellable; per-page progress.",
+   "params": [
+    {
+     "name": "path",
+     "required": true,
+     "schema": {
+      "$ref": "#/components/schemas/Path"
+     }
+    },
+    {
+     "name": "password",
+     "required": false,
+     "schema": {
+      "$ref": "#/components/schemas/Password"
+     }
+    },
+    {
+     "name": "languages",
+     "required": true,
+     "schema": {
+      "type": "array",
+      "items": {
+       "type": "string"
+      }
+     }
+    },
+    {
+     "name": "detectOrientation",
+     "required": false,
+     "schema": {
+      "type": "boolean"
+     }
+    },
+    {
+     "name": "pages",
+     "required": false,
+     "schema": {
+      "$ref": "#/components/schemas/PageRange"
+     }
+    },
+    {
+     "name": "outputPdfPath",
+     "required": false,
+     "schema": {
+      "$ref": "#/components/schemas/Path"
+     }
+    },
+    {
+     "name": "outputTextPath",
+     "required": false,
+     "schema": {
+      "$ref": "#/components/schemas/Path"
+     }
+    }
+   ],
+   "result": {
+    "name": "result",
+    "schema": {
+     "$ref": "#/components/schemas/JobStarted"
+    }
+   },
+   "errors": [
+    {
+     "$ref": "#/components/errors/FileNotFound"
+    },
+    {
+     "$ref": "#/components/errors/NotAPdf"
+    },
+    {
+     "$ref": "#/components/errors/Corrupt"
+    },
+    {
+     "$ref": "#/components/errors/PasswordRequired"
+    },
+    {
+     "$ref": "#/components/errors/WrongPassword"
+    },
+    {
+     "$ref": "#/components/errors/TooLarge"
+    },
+    {
+     "$ref": "#/components/errors/Timeout"
+    },
+    {
+     "$ref": "#/components/errors/OcrEngineMissing"
+    },
+    {
+     "$ref": "#/components/errors/OcrLanguageMissing"
+    }
+   ],
+   "x-network": "none",
+   "x-job": true
+  },
+  {
+   "name": "convert.toPdf",
+   "summary": "Image/TXT/HTML/Word/Excel/PowerPoint to PDF.",
+   "params": [
+    {
+     "name": "inputPath",
+     "required": true,
+     "schema": {
+      "$ref": "#/components/schemas/Path"
+     }
+    },
+    {
+     "name": "outputPath",
+     "required": true,
+     "schema": {
+      "$ref": "#/components/schemas/Path"
+     }
+    },
+    {
+     "name": "engine",
+     "required": false,
+     "schema": {
+      "type": "string",
+      "enum": [
+       "auto",
+       "libreoffice",
+       "msoffice",
+       "builtin"
+      ]
+     }
+    }
+   ],
+   "result": {
+    "name": "result",
+    "schema": {
+     "$ref": "#/components/schemas/JobStarted"
+    }
+   },
+   "errors": [
+    {
+     "$ref": "#/components/errors/ConverterUnavailable"
+    },
+    {
+     "$ref": "#/components/errors/FileNotFound"
+    },
+    {
+     "$ref": "#/components/errors/Corrupt"
+    },
+    {
+     "$ref": "#/components/errors/Timeout"
+    }
+   ],
+   "x-network": "none",
+   "x-job": true
+  },
+  {
+   "name": "convert.fromPdf",
+   "summary": "PDF to DOCX/XLSX/PPTX/JPG/PNG/TXT/HTML. Result carries quality warnings.",
+   "params": [
+    {
+     "name": "path",
+     "required": true,
+     "schema": {
+      "$ref": "#/components/schemas/Path"
+     }
+    },
+    {
+     "name": "password",
+     "required": false,
+     "schema": {
+      "$ref": "#/components/schemas/Password"
+     }
+    },
+    {
+     "name": "format",
+     "required": true,
+     "schema": {
+      "type": "string",
+      "enum": [
+       "docx",
+       "xlsx",
+       "pptx",
+       "jpg",
+       "png",
+       "txt",
+       "html"
+      ]
+     }
+    },
+    {
+     "name": "outputDir",
+     "required": true,
+     "schema": {
+      "$ref": "#/components/schemas/Path"
+     }
+    },
+    {
+     "name": "pages",
+     "required": false,
+     "schema": {
+      "$ref": "#/components/schemas/PageRange"
+     }
+    }
+   ],
+   "result": {
+    "name": "result",
+    "schema": {
+     "$ref": "#/components/schemas/JobStarted"
+    }
+   },
+   "errors": [
+    {
+     "$ref": "#/components/errors/FileNotFound"
+    },
+    {
+     "$ref": "#/components/errors/NotAPdf"
+    },
+    {
+     "$ref": "#/components/errors/Corrupt"
+    },
+    {
+     "$ref": "#/components/errors/PasswordRequired"
+    },
+    {
+     "$ref": "#/components/errors/WrongPassword"
+    },
+    {
+     "$ref": "#/components/errors/TooLarge"
+    },
+    {
+     "$ref": "#/components/errors/Timeout"
+    },
+    {
+     "$ref": "#/components/errors/ConverterUnavailable"
+    }
+   ],
+   "x-network": "none",
+   "x-job": true
+  },
+  {
+   "name": "compare.run",
+   "summary": "Compare two PDFs: text diff, page/metadata diff, optional visual diff, exportable report.",
+   "params": [
+    {
+     "name": "left",
+     "required": true,
+     "schema": {
+      "$ref": "#/components/schemas/Path"
+     }
+    },
+    {
+     "name": "right",
+     "required": true,
+     "schema": {
+      "$ref": "#/components/schemas/Path"
+     }
+    },
+    {
+     "name": "leftPassword",
+     "required": false,
+     "schema": {
+      "$ref": "#/components/schemas/Password"
+     }
+    },
+    {
+     "name": "rightPassword",
+     "required": false,
+     "schema": {
+      "$ref": "#/components/schemas/Password"
+     }
+    },
+    {
+     "name": "visual",
+     "required": false,
+     "schema": {
+      "type": "boolean"
+     }
+    },
+    {
+     "name": "reportPath",
+     "required": false,
+     "schema": {
+      "$ref": "#/components/schemas/Path"
+     }
+    },
+    {
+     "name": "reportFormat",
+     "required": false,
+     "schema": {
+      "type": "string",
+      "enum": [
+       "html",
+       "pdf",
+       "txt"
+      ]
+     }
+    }
+   ],
+   "result": {
+    "name": "result",
+    "schema": {
+     "$ref": "#/components/schemas/JobStarted"
+    }
+   },
+   "errors": [
+    {
+     "$ref": "#/components/errors/FileNotFound"
+    },
+    {
+     "$ref": "#/components/errors/NotAPdf"
+    },
+    {
+     "$ref": "#/components/errors/Corrupt"
+    },
+    {
+     "$ref": "#/components/errors/PasswordRequired"
+    },
+    {
+     "$ref": "#/components/errors/WrongPassword"
+    },
+    {
+     "$ref": "#/components/errors/TooLarge"
+    },
+    {
+     "$ref": "#/components/errors/Timeout"
+    }
+   ],
+   "x-network": "none",
+   "x-job": true
+  },
+  {
+   "name": "library.upsert",
+   "summary": "Register or update a document reference and reading state.",
+   "params": [
+    {
+     "name": "path",
+     "required": true,
+     "schema": {
+      "$ref": "#/components/schemas/Path"
+     }
+    },
+    {
+     "name": "title",
+     "required": false,
+     "schema": {
+      "type": "string"
+     }
+    },
+    {
+     "name": "lastPage",
+     "required": false,
+     "schema": {
+      "type": "integer"
+     }
+    },
+    {
+     "name": "favorite",
+     "required": false,
+     "schema": {
+      "type": "boolean"
+     }
+    }
+   ],
+   "result": {
+    "name": "result",
+    "schema": {
+     "$ref": "#/components/schemas/LibraryDocument"
+    }
+   },
+   "errors": [],
+   "x-network": "none",
+   "x-job": false
+  },
+  {
+   "name": "library.list",
+   "summary": "Recents, favorites, folder, tag, or filename/content search.",
+   "params": [
+    {
+     "name": "query",
+     "required": false,
+     "schema": {
+      "type": "string"
+     }
+    },
+    {
+     "name": "scope",
+     "required": false,
+     "schema": {
+      "type": "string",
+      "enum": [
+       "recent",
+       "favorites",
+       "folder",
+       "tag",
+       "search"
+      ]
+     }
+    },
+    {
+     "name": "folderId",
+     "required": false,
+     "schema": {
+      "type": "string"
+     }
+    },
+    {
+     "name": "tag",
+     "required": false,
+     "schema": {
+      "type": "string"
+     }
+    },
+    {
+     "name": "limit",
+     "required": false,
+     "schema": {
+      "type": "integer"
+     }
+    }
+   ],
+   "result": {
+    "name": "result",
+    "schema": {
+     "type": "object",
+     "properties": {
+      "documents": {
+       "type": "array",
+       "items": {
+        "$ref": "#/components/schemas/LibraryDocument"
+       }
+      }
+     },
+     "additionalProperties": false,
+     "required": [
+      "documents"
+     ]
+    }
+   },
+   "errors": [],
+   "x-network": "none",
+   "x-job": false
+  },
+  {
+   "name": "library.remove",
+   "summary": "Remove from library only. Never deletes the file.",
+   "params": [
+    {
+     "name": "documentId",
+     "required": true,
+     "schema": {
+      "$ref": "#/components/schemas/DocumentId"
+     }
+    }
+   ],
+   "result": {
+    "name": "result",
+    "schema": {
+     "type": "object",
+     "properties": {
+      "removed": {
+       "type": "boolean"
+      }
+     },
+     "additionalProperties": false,
+     "required": [
+      "removed"
+     ]
+    }
+   },
+   "errors": [],
+   "x-network": "none",
+   "x-job": false
+  },
+  {
+   "name": "library.relocate",
+   "summary": "Point a missing document at its new path.",
+   "params": [
+    {
+     "name": "documentId",
+     "required": true,
+     "schema": {
+      "$ref": "#/components/schemas/DocumentId"
+     }
+    },
+    {
+     "name": "newPath",
+     "required": true,
+     "schema": {
+      "$ref": "#/components/schemas/Path"
+     }
+    }
+   ],
+   "result": {
+    "name": "result",
+    "schema": {
+     "$ref": "#/components/schemas/LibraryDocument"
+    }
+   },
+   "errors": [],
+   "x-network": "none",
+   "x-job": false
+  },
+  {
+   "name": "library.exportUserData",
+   "summary": "Export all user data (library, notes, chats) as JSON.",
+   "params": [
+    {
+     "name": "outputPath",
+     "required": true,
+     "schema": {
+      "$ref": "#/components/schemas/Path"
+     }
+    }
+   ],
+   "result": {
+    "name": "result",
+    "schema": {
+     "$ref": "#/components/schemas/JobResult"
+    }
+   },
+   "errors": [],
+   "x-network": "none",
+   "x-job": false
+  },
+  {
+   "name": "library.deleteData",
+   "summary": "Delete caches, chat history, or everything.",
+   "params": [
+    {
+     "name": "what",
+     "required": true,
+     "schema": {
+      "type": "string",
+      "enum": [
+       "caches",
+       "chat_history",
+       "all"
+      ]
+     }
+    }
+   ],
+   "result": {
+    "name": "result",
+    "schema": {
+     "type": "object",
+     "properties": {
+      "deleted": {
+       "type": "boolean"
+      }
+     },
+     "additionalProperties": false,
+     "required": [
+      "deleted"
+     ]
+    }
+   },
+   "errors": [],
+   "x-network": "none",
+   "x-job": false
+  },
+  {
+   "name": "index.build",
+   "summary": "Incremental background indexing (extract, OCR if enabled, chunk, embed). Local embeddings by default.",
+   "params": [
+    {
+     "name": "documentId",
+     "required": true,
+     "schema": {
+      "$ref": "#/components/schemas/DocumentId"
+     }
+    },
+    {
+     "name": "path",
+     "required": true,
+     "schema": {
+      "$ref": "#/components/schemas/Path"
+     }
+    },
+    {
+     "name": "password",
+     "required": false,
+     "schema": {
+      "$ref": "#/components/schemas/Password"
+     }
+    },
+    {
+     "name": "embeddings",
+     "required": false,
+     "schema": {
+      "type": "string",
+      "enum": [
+       "local",
+       "remote",
+       "none"
+      ]
+     }
+    },
+    {
+     "name": "consent",
+     "required": false,
+     "schema": {
+      "$ref": "#/components/schemas/Consent"
+     }
+    }
+   ],
+   "result": {
+    "name": "result",
+    "schema": {
+     "$ref": "#/components/schemas/JobStarted"
+    }
+   },
+   "errors": [
+    {
+     "$ref": "#/components/errors/FileNotFound"
+    },
+    {
+     "$ref": "#/components/errors/NotAPdf"
+    },
+    {
+     "$ref": "#/components/errors/Corrupt"
+    },
+    {
+     "$ref": "#/components/errors/PasswordRequired"
+    },
+    {
+     "$ref": "#/components/errors/WrongPassword"
+    },
+    {
+     "$ref": "#/components/errors/TooLarge"
+    },
+    {
+     "$ref": "#/components/errors/Timeout"
+    },
+    {
+     "$ref": "#/components/errors/ConsentRequired"
+    }
+   ],
+   "x-network": "optional",
+   "x-job": true
+  },
+  {
+   "name": "index.status",
+   "summary": "Indexing state for a document.",
+   "params": [
+    {
+     "name": "documentId",
+     "required": true,
+     "schema": {
+      "$ref": "#/components/schemas/DocumentId"
+     }
+    }
+   ],
+   "result": {
+    "name": "result",
+    "schema": {
+     "type": "object",
+     "properties": {
+      "state": {
+       "type": "string",
+       "enum": [
+        "none",
+        "queued",
+        "running",
+        "ready",
+        "stale",
+        "failed"
+       ]
+      },
+      "chunks": {
+       "type": "integer"
+      },
+      "pagesIndexed": {
+       "type": "integer"
+      }
+     },
+     "additionalProperties": false,
+     "required": [
+      "state",
+      "chunks",
+      "pagesIndexed"
+     ]
+    }
+   },
+   "errors": [],
+   "x-network": "none",
+   "x-job": false
+  },
+  {
+   "name": "search.hybrid",
+   "summary": "Keyword + vector search with rank fusion, restricted to one document.",
+   "params": [
+    {
+     "name": "documentId",
+     "required": true,
+     "schema": {
+      "$ref": "#/components/schemas/DocumentId"
+     }
+    },
+    {
+     "name": "query",
+     "required": true,
+     "schema": {
+      "type": "string"
+     }
+    },
+    {
+     "name": "limit",
+     "required": false,
+     "schema": {
+      "type": "integer"
+     }
+    }
+   ],
+   "result": {
+    "name": "result",
+    "schema": {
+     "type": "object",
+     "properties": {
+      "results": {
+       "type": "array",
+       "items": {
+        "type": "object",
+        "properties": {
+         "chunkId": {
+          "type": "string"
+         },
+         "pageNumber": {
+          "type": "integer"
+         },
+         "score": {
+          "type": "number"
+         },
+         "text": {
+          "type": "string"
+         }
+        },
+        "additionalProperties": false,
+        "required": [
+         "chunkId",
+         "pageNumber",
+         "score",
+         "text"
+        ]
+       }
+      }
+     },
+     "additionalProperties": false,
+     "required": [
+      "results"
+     ]
+    }
+   },
+   "errors": [],
+   "x-network": "none",
+   "x-job": false
+  },
+  {
+   "name": "chat.ask",
+   "summary": "Grounded Q&A. Streams chat.delta notifications. Only retrieved chunks are sent; consent required.",
+   "params": [
+    {
+     "name": "conversationId",
+     "required": true,
+     "schema": {
+      "type": "string"
+     }
+    },
+    {
+     "name": "documentId",
+     "required": true,
+     "schema": {
+      "$ref": "#/components/schemas/DocumentId"
+     }
+    },
+    {
+     "name": "question",
+     "required": true,
+     "schema": {
+      "type": "string"
+     }
+    },
+    {
+     "name": "provider",
+     "required": true,
+     "schema": {
+      "$ref": "#/components/schemas/ProviderConfig"
+     }
+    },
+    {
+     "name": "consent",
+     "required": true,
+     "schema": {
+      "$ref": "#/components/schemas/Consent"
+     }
+    },
+    {
+     "name": "history",
+     "required": false,
+     "schema": {
+      "type": "array",
+      "items": {
+       "type": "object"
+      }
+     }
+    }
+   ],
+   "result": {
+    "name": "result",
+    "schema": {
+     "$ref": "#/components/schemas/JobStarted"
+    }
+   },
+   "errors": [
+    {
+     "$ref": "#/components/errors/ConsentRequired"
+    },
+    {
+     "$ref": "#/components/errors/ProviderAuth"
+    },
+    {
+     "$ref": "#/components/errors/ProviderRateLimit"
+    },
+    {
+     "$ref": "#/components/errors/ProviderCredits"
+    },
+    {
+     "$ref": "#/components/errors/ProviderUnavailable"
+    },
+    {
+     "$ref": "#/components/errors/ModelUnavailable"
+    },
+    {
+     "$ref": "#/components/errors/ContextTooLong"
+    },
+    {
+     "$ref": "#/components/errors/Network"
+    },
+    {
+     "$ref": "#/components/errors/NotIndexed"
+    }
+   ],
+   "x-network": "required",
+   "x-job": true,
+   "description": "Final result contains verified citations only. If retrieval has no supporting evidence the answer is the fixed 'not in document' response with zero citations."
+  },
+  {
+   "name": "tools.run",
+   "summary": "Summarize, notes, quiz, translate, writing assist. Result has page references.",
+   "params": [
+    {
+     "name": "tool",
+     "required": true,
+     "schema": {
+      "type": "string",
+      "enum": [
+       "summary",
+       "notes",
+       "quiz",
+       "translate",
+       "rewrite",
+       "explain"
+      ]
+     }
+    },
+    {
+     "name": "documentId",
+     "required": true,
+     "schema": {
+      "$ref": "#/components/schemas/DocumentId"
+     }
+    },
+    {
+     "name": "options",
+     "required": true,
+     "schema": {
+      "type": "object"
+     }
+    },
+    {
+     "name": "selection",
+     "required": false,
+     "schema": {
+      "type": "object"
+     }
+    },
+    {
+     "name": "provider",
+     "required": true,
+     "schema": {
+      "$ref": "#/components/schemas/ProviderConfig"
+     }
+    },
+    {
+     "name": "consent",
+     "required": true,
+     "schema": {
+      "$ref": "#/components/schemas/Consent"
+     }
+    }
+   ],
+   "result": {
+    "name": "result",
+    "schema": {
+     "$ref": "#/components/schemas/JobStarted"
+    }
+   },
+   "errors": [
+    {
+     "$ref": "#/components/errors/ConsentRequired"
+    },
+    {
+     "$ref": "#/components/errors/ProviderAuth"
+    },
+    {
+     "$ref": "#/components/errors/ProviderRateLimit"
+    },
+    {
+     "$ref": "#/components/errors/ProviderCredits"
+    },
+    {
+     "$ref": "#/components/errors/ProviderUnavailable"
+    },
+    {
+     "$ref": "#/components/errors/ModelUnavailable"
+    },
+    {
+     "$ref": "#/components/errors/ContextTooLong"
+    },
+    {
+     "$ref": "#/components/errors/Network"
+    },
+    {
+     "$ref": "#/components/errors/NotIndexed"
+    }
+   ],
+   "x-network": "required",
+   "x-job": true
+  },
+  {
+   "name": "provider.test",
+   "summary": "Test connectivity and key with a minimal request containing no document content.",
+   "params": [
+    {
+     "name": "provider",
+     "required": true,
+     "schema": {
+      "$ref": "#/components/schemas/ProviderConfig"
+     }
+    }
+   ],
+   "result": {
+    "name": "result",
+    "schema": {
+     "type": "object",
+     "properties": {
+      "ok": {
+       "type": "boolean"
+      },
+      "latencyMs": {
+       "type": "integer"
+      },
+      "models": {
+       "type": "array",
+       "items": {
+        "type": "string"
+       }
+      }
+     },
+     "additionalProperties": false,
+     "required": [
+      "ok",
+      "latencyMs"
+     ]
+    }
+   },
+   "errors": [
+    {
+     "$ref": "#/components/errors/ProviderAuth"
+    },
+    {
+     "$ref": "#/components/errors/ProviderUnavailable"
+    },
+    {
+     "$ref": "#/components/errors/Network"
+    },
+    {
+     "$ref": "#/components/errors/ModelUnavailable"
+    }
+   ],
+   "x-network": "required",
+   "x-job": false
+  },
+  {
+   "name": "usage.get",
+   "summary": "Local metering counters (AI credits, OCR pages) for the current period.",
+   "params": [],
+   "result": {
+    "name": "result",
+    "schema": {
+     "type": "object",
+     "properties": {
+      "period": {
+       "type": "string"
+      },
+      "aiCreditsUsed": {
+       "type": "integer"
+      },
+      "ocrPagesUsed": {
+       "type": "integer"
+      }
+     },
+     "additionalProperties": false,
+     "required": [
+      "period",
+      "aiCreditsUsed",
+      "ocrPagesUsed"
+     ]
+    }
+   },
+   "errors": [],
+   "x-network": "none",
+   "x-job": false
+  },
+  {
+   "name": "entitlement.set",
+   "summary": "Apply a signed entitlement token obtained by the app (Store/backend). Verified against an embedded public key.",
+   "params": [
+    {
+     "name": "token",
+     "required": true,
+     "schema": {
+      "type": "string"
+     }
+    }
+   ],
+   "result": {
+    "name": "result",
+    "schema": {
+     "type": "object",
+     "properties": {
+      "plan": {
+       "type": "string",
+       "enum": [
+        "free",
+        "monthly",
+        "annual",
+        "lifetime"
+       ]
+      },
+      "expiresAt": {
+       "type": [
+        "string",
+        "null"
+       ]
+      },
+      "valid": {
+       "type": "boolean"
+      }
+     },
+     "additionalProperties": false,
+     "required": [
+      "plan",
+      "expiresAt",
+      "valid"
+     ]
+    }
+   },
+   "errors": [
+    {
+     "$ref": "#/components/errors/InvalidEntitlement"
+    }
+   ],
+   "x-network": "none",
+   "x-job": false
+  }
+ ],
+ "components": {
+  "schemas": {
+   "Path": {
+    "type": "string",
+    "description": "Absolute Windows or POSIX path on the local machine."
+   },
+   "JobId": {
+    "type": "string",
+    "pattern": "^[A-Za-z0-9_-]{8,64}$"
+   },
+   "DocumentId": {
+    "type": "string",
+    "minLength": 1,
+    "description": "Stable ID of a library document (sha256 of canonical path + size + mtime bucket, assigned by library.upsert)."
+   },
+   "Password": {
+    "type": "string",
+    "description": "Transient. Never logged or persisted by the sidecar."
+   },
+   "PageRange": {
+    "type": "string",
+    "description": "1-based, e.g. '1-3,7,10-'. Validated server-side."
+   },
+   "Consent": {
+    "type": "object",
+    "properties": {
+     "providerId": {
+      "type": "string"
+     },
+     "documentId": {
+      "$ref": "#/components/schemas/DocumentId"
+     },
+     "scope": {
+      "type": "string",
+      "enum": [
+       "selection",
+       "retrieved_chunks",
+       "full_document"
+      ]
+     },
+     "grantedAt": {
+      "type": "string",
+      "format": "date-time"
+     }
+    },
+    "additionalProperties": false,
+    "required": [
+     "providerId",
+     "documentId",
+     "scope",
+     "grantedAt"
+    ]
+   },
+   "ProviderConfig": {
+    "type": "object",
+    "properties": {
+     "providerId": {
+      "type": "string"
+     },
+     "kind": {
+      "type": "string",
+      "enum": [
+       "openai_compatible",
+       "anthropic",
+       "local"
+      ]
+     },
+     "baseUrl": {
+      "type": "string",
+      "format": "uri",
+      "pattern": "^https://"
+     },
+     "model": {
+      "type": "string"
+     },
+     "apiKey": {
+      "type": "string"
+     },
+     "temperature": {
+      "type": "number"
+     },
+     "maxOutputTokens": {
+      "type": "integer"
+     },
+     "timeoutSeconds": {
+      "type": "integer"
+     }
+    },
+    "additionalProperties": false,
+    "required": [
+     "providerId",
+     "kind",
+     "baseUrl",
+     "model"
+    ]
+   },
+   "PdfDocumentInfo": {
+    "type": "object",
+    "properties": {
+     "path": {
+      "$ref": "#/components/schemas/Path"
+     },
+     "pageCount": {
+      "type": "integer"
+     },
+     "fileSizeBytes": {
+      "type": "integer"
+     },
+     "title": {
+      "type": [
+       "string",
+       "null"
+      ]
+     },
+     "author": {
+      "type": [
+       "string",
+       "null"
+      ]
+     },
+     "encrypted": {
+      "type": "boolean"
+     },
+     "hasTextLayer": {
+      "type": "boolean"
+     },
+     "scannedLikely": {
+      "type": "boolean",
+      "description": "True when most pages have no extractable text; UI offers OCR."
+     }
+    },
+    "additionalProperties": false,
+    "required": [
+     "path",
+     "pageCount",
+     "fileSizeBytes",
+     "title",
+     "author",
+     "encrypted",
+     "hasTextLayer",
+     "scannedLikely"
+    ]
+   },
+   "PageText": {
+    "type": "object",
+    "properties": {
+     "pageNumber": {
+      "type": "integer"
+     },
+     "text": {
+      "type": "string"
+     }
+    },
+    "additionalProperties": false,
+    "required": [
+     "pageNumber",
+     "text"
+    ]
+   },
+   "JobStarted": {
+    "type": "object",
+    "properties": {
+     "jobId": {
+      "$ref": "#/components/schemas/JobId"
+     }
+    },
+    "additionalProperties": false,
+    "required": [
+     "jobId"
+    ]
+   },
+   "JobResult": {
+    "type": "object",
+    "properties": {
+     "jobId": {
+      "$ref": "#/components/schemas/JobId"
+     },
+     "status": {
+      "type": "string",
+      "enum": [
+       "succeeded",
+       "failed",
+       "cancelled"
+      ]
+     },
+     "outputs": {
+      "type": "array",
+      "items": {
+       "$ref": "#/components/schemas/Path"
+      }
+     },
+     "warnings": {
+      "type": "array",
+      "items": {
+       "$ref": "#/components/schemas/Warning"
+      }
+     },
+     "error": {
+      "$ref": "#/components/schemas/ErrorData"
+     }
+    },
+    "additionalProperties": false,
+    "required": [
+     "jobId",
+     "status",
+     "outputs",
+     "warnings"
+    ]
+   },
+   "Warning": {
+    "type": "object",
+    "properties": {
+     "code": {
+      "type": "string"
+     },
+     "message": {
+      "type": "string"
+     },
+     "pages": {
+      "type": "array",
+      "items": {
+       "type": "integer"
+      }
+     }
+    },
+    "additionalProperties": false,
+    "required": [
+     "code",
+     "message"
+    ]
+   },
+   "ErrorData": {
+    "type": "object",
+    "properties": {
+     "code": {
+      "type": "string"
+     },
+     "message": {
+      "type": "string"
+     },
+     "retryable": {
+      "type": "boolean"
+     },
+     "details": {
+      "type": "object"
+     }
+    },
+    "additionalProperties": false,
+    "required": [
+     "code",
+     "message",
+     "retryable"
+    ]
+   },
+   "ProgressNotification": {
+    "type": "object",
+    "properties": {
+     "jobId": {
+      "$ref": "#/components/schemas/JobId"
+     },
+     "stage": {
+      "type": "string"
+     },
+     "fraction": {
+      "type": [
+       "number",
+       "null"
+      ],
+      "minimum": 0,
+      "maximum": 1,
+      "description": "null means progress is genuinely unknown. Never simulated."
+     }
+    },
+    "additionalProperties": false,
+    "required": [
+     "jobId",
+     "stage",
+     "fraction"
+    ]
+   },
+   "StreamDelta": {
+    "type": "object",
+    "properties": {
+     "jobId": {
+      "$ref": "#/components/schemas/JobId"
+     },
+     "kind": {
+      "type": "string",
+      "enum": [
+       "token",
+       "citation",
+       "done",
+       "error"
+      ]
+     },
+     "text": {
+      "type": "string"
+     },
+     "citation": {
+      "$ref": "#/components/schemas/Citation"
+     },
+     "error": {
+      "$ref": "#/components/schemas/ErrorData"
+     }
+    },
+    "additionalProperties": false,
+    "required": [
+     "jobId",
+     "kind"
+    ]
+   },
+   "Citation": {
+    "type": "object",
+    "properties": {
+     "chunkId": {
+      "type": "string"
+     },
+     "documentId": {
+      "$ref": "#/components/schemas/DocumentId"
+     },
+     "pageNumber": {
+      "type": "integer"
+     },
+     "quote": {
+      "type": "string",
+      "description": "Verbatim excerpt from the retrieved chunk, never model-authored."
+     }
+    },
+    "additionalProperties": false,
+    "required": [
+     "chunkId",
+     "documentId",
+     "pageNumber",
+     "quote"
+    ]
+   },
+   "Capabilities": {
+    "type": "object",
+    "properties": {
+     "ocr": {
+      "type": "object",
+      "properties": {
+       "available": {
+        "type": "boolean"
+       },
+       "languages": {
+        "type": "array",
+        "items": {
+         "type": "string"
+        }
+       },
+       "orientationDetection": {
+        "type": "boolean"
+       }
+      },
+      "additionalProperties": false,
+      "required": [
+       "available",
+       "languages",
+       "orientationDetection"
+      ]
+     },
+     "officeToPdf": {
+      "type": "object",
+      "properties": {
+       "libreOffice": {
+        "type": "boolean"
+       },
+       "microsoftOffice": {
+        "type": "boolean"
+       }
+      },
+      "additionalProperties": false,
+      "required": [
+       "libreOffice",
+       "microsoftOffice"
+      ]
+     },
+     "localEmbeddings": {
+      "type": "object",
+      "properties": {
+       "available": {
+        "type": "boolean"
+       },
+       "model": {
+        "type": [
+         "string",
+         "null"
+        ]
+       }
+      },
+      "additionalProperties": false,
+      "required": [
+       "available",
+       "model"
+      ]
+     },
+     "sqlcipher": {
+      "type": "boolean"
+     },
+     "redactionModes": {
+      "type": "array",
+      "items": {
+       "type": "string",
+       "enum": [
+        "rasterize",
+        "content_stream"
+       ]
+      }
+     }
+    },
+    "additionalProperties": false,
+    "required": [
+     "ocr",
+     "officeToPdf",
+     "localEmbeddings",
+     "sqlcipher",
+     "redactionModes"
+    ]
+   },
+   "LibraryDocument": {
+    "type": "object",
+    "properties": {
+     "documentId": {
+      "$ref": "#/components/schemas/DocumentId"
+     },
+     "path": {
+      "$ref": "#/components/schemas/Path"
+     },
+     "title": {
+      "type": [
+       "string",
+       "null"
+      ]
+     },
+     "lastPage": {
+      "type": "integer"
+     },
+     "favorite": {
+      "type": "boolean"
+     },
+     "tags": {
+      "type": "array",
+      "items": {
+       "type": "string"
+      }
+     },
+     "folderId": {
+      "type": [
+       "string",
+       "null"
+      ]
+     },
+     "missing": {
+      "type": "boolean",
+      "description": "File moved/renamed/deleted on disk; UI offers Locate or Remove."
+     },
+     "updatedAt": {
+      "type": "string",
+      "format": "date-time"
+     }
+    },
+    "additionalProperties": false,
+    "required": [
+     "documentId",
+     "path",
+     "title",
+     "lastPage",
+     "favorite",
+     "tags",
+     "folderId",
+     "missing",
+     "updatedAt"
+    ]
+   }
+  },
+  "errors": {
+   "FileNotFound": {
+    "code": -32001,
+    "message": "File not found"
+   },
+   "NotAPdf": {
+    "code": -32002,
+    "message": "Not a PDF"
+   },
+   "Corrupt": {
+    "code": -32003,
+    "message": "Corrupt or unreadable file"
+   },
+   "PasswordRequired": {
+    "code": -32004,
+    "message": "Password required"
+   },
+   "WrongPassword": {
+    "code": -32005,
+    "message": "Wrong password"
+   },
+   "TooLarge": {
+    "code": -32006,
+    "message": "File exceeds size limit"
+   },
+   "Timeout": {
+    "code": -32007,
+    "message": "Operation timed out"
+   },
+   "Cancelled": {
+    "code": -32008,
+    "message": "Cancelled"
+   },
+   "RedactionVerificationFailed": {
+    "code": -32020,
+    "message": "Redacted text still extractable; output discarded"
+   },
+   "OcrEngineMissing": {
+    "code": -32021,
+    "message": "OCR engine not installed"
+   },
+   "OcrLanguageMissing": {
+    "code": -32022,
+    "message": "OCR language data not installed"
+   },
+   "ConverterUnavailable": {
+    "code": -32023,
+    "message": "No converter available for this format on this machine"
+   },
+   "ConsentRequired": {
+    "code": -32041,
+    "message": "User consent required before sending document content"
+   },
+   "ProviderAuth": {
+    "code": -32042,
+    "message": "Invalid or missing API key"
+   },
+   "ProviderRateLimit": {
+    "code": -32043,
+    "message": "Provider rate limit"
+   },
+   "ProviderCredits": {
+    "code": -32044,
+    "message": "Insufficient provider credits"
+   },
+   "ProviderUnavailable": {
+    "code": -32045,
+    "message": "Provider unavailable"
+   },
+   "ModelUnavailable": {
+    "code": -32046,
+    "message": "Model unavailable"
+   },
+   "ContextTooLong": {
+    "code": -32047,
+    "message": "Context length exceeded"
+   },
+   "Network": {
+    "code": -32048,
+    "message": "Network failure"
+   },
+   "NotIndexed": {
+    "code": -32049,
+    "message": "Document not indexed yet"
+   },
+   "InvalidEntitlement": {
+    "code": -32060,
+    "message": "Entitlement token invalid or expired"
+   },
+   "UnknownJob": {
+    "code": -32070,
+    "message": "Unknown job"
+   },
+   "VersionMismatch": {
+    "code": -32071,
+    "message": "Contract version mismatch"
+   }
+  }
+ }
+}
