@@ -13,6 +13,12 @@ class DocumentRecord:
     updated_at: datetime
 
 
+@dataclass(frozen=True, slots=True)
+class Workspace:
+    name: str
+    created_at: datetime
+
+
 class DocumentRepository:
     """Stores references and reading state without copying document contents."""
 
@@ -29,6 +35,17 @@ class DocumentRepository:
                 updated_at TEXT NOT NULL
             )
             """
+        )
+        self._connection.execute(
+            "CREATE TABLE IF NOT EXISTS tags (path TEXT NOT NULL, tag TEXT NOT NULL, "
+            "PRIMARY KEY(path, tag))"
+        )
+        self._connection.execute(
+            "CREATE TABLE IF NOT EXISTS workspaces (name TEXT PRIMARY KEY, created_at TEXT NOT NULL)"
+        )
+        self._connection.execute(
+            "CREATE TABLE IF NOT EXISTS workspace_documents "
+            "(workspace TEXT NOT NULL, path TEXT NOT NULL, PRIMARY KEY(workspace, path))"
         )
         self._connection.commit()
 
@@ -73,6 +90,48 @@ class DocumentRepository:
             "SELECT * FROM documents ORDER BY updated_at DESC LIMIT ?", (limit,)
         ).fetchall()
         return tuple(self._record(row) for row in rows)
+
+    def set_tags(self, path: Path, tags: set[str]) -> tuple[str, ...]:
+        normalized = {tag.strip() for tag in tags if tag.strip()}
+        key = str(path.expanduser().resolve())
+        self._connection.execute("DELETE FROM tags WHERE path = ?", (key,))
+        self._connection.executemany(
+            "INSERT INTO tags(path, tag) VALUES (?, ?)", [(key, tag) for tag in normalized]
+        )
+        self._connection.commit()
+        return tuple(sorted(normalized))
+
+    def tags(self, path: Path) -> tuple[str, ...]:
+        key = str(path.expanduser().resolve())
+        rows = self._connection.execute(
+            "SELECT tag FROM tags WHERE path = ? ORDER BY tag", (key,)
+        ).fetchall()
+        return tuple(row["tag"] for row in rows)
+
+    def create_workspace(self, name: str) -> Workspace:
+        if not name.strip():
+            raise ValueError("workspace name must not be empty")
+        created_at = datetime.now(timezone.utc)
+        self._connection.execute(
+            "INSERT INTO workspaces(name, created_at) VALUES (?, ?)",
+            (name.strip(), created_at.isoformat()),
+        )
+        self._connection.commit()
+        return Workspace(name.strip(), created_at)
+
+    def add_to_workspace(self, workspace: str, path: Path) -> None:
+        self._connection.execute(
+            "INSERT OR IGNORE INTO workspace_documents(workspace, path) VALUES (?, ?)",
+            (workspace, str(path.expanduser().resolve())),
+        )
+        self._connection.commit()
+
+    def workspace_documents(self, workspace: str) -> tuple[Path, ...]:
+        rows = self._connection.execute(
+            "SELECT path FROM workspace_documents WHERE workspace = ? ORDER BY path",
+            (workspace,),
+        ).fetchall()
+        return tuple(Path(row["path"]) for row in rows)
 
     def close(self) -> None:
         self._connection.close()

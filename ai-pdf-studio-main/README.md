@@ -13,11 +13,20 @@ The repository currently contains a tested Python core that can back the planned
 - OpenAI chat and embeddings-compatible HTTP integration, including SSE chat streaming.
 - Explicit consent enforcement before document text is sent to OpenAI.
 - Citation-aware PDF chat responses whose source pages are resolved from retrieved chunks.
-- Local page editing operations: merge, reorder, rotate, delete, duplicate, and blank-page insertion.
+- Local page editing operations: merge, split, compress, reorder, rotate, delete, duplicate,
+  and blank-page insertion.
+- True raster redaction, Tesseract OCR, LibreOffice conversion, and text comparison services
+  with explicit errors when their optional engines are unavailable.
+- SQLite-backed tags and workspaces, AES-GCM field encryption, opt-in telemetry, signed
+  entitlement verification, and settings/onboarding models.
+- An MSIX manifest template and Windows packaging checklist.
 - Architecture and delivery documentation.
 
 The Flutter Windows UI is not included in this checkout yet. These services expose the behavior
 that a Flutter sidecar client can call without coupling UI code to PDF parsing or provider APIs.
+
+OCR requires Tesseract, office conversion requires LibreOffice, and redaction requires the
+`pdftoppm` command plus Pillow. The services fail clearly when an optional engine is missing.
 
 ## Development
 

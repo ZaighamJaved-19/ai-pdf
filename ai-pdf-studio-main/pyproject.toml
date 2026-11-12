@@ -9,6 +9,8 @@ description = "Privacy-first PDF productivity services for AI PDF Studio"
 requires-python = ">=3.11"
 dependencies = [
     "pypdf>=5.0,<6",
+    "Pillow>=10.0,<12",
+    "cryptography>=42.0,<45",
 ]
 
 [project.optional-dependencies]

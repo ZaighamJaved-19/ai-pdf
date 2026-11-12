@@ -27,3 +27,13 @@ def test_page_transform_can_delete_duplicate_and_insert_blank(tmp_path: Path) ->
     )
 
     assert len(PdfReader(str(output)).pages) == 4
+
+
+def test_split_creates_one_pdf_per_page(tmp_path: Path) -> None:
+    source = tmp_path / "source.pdf"
+    make_pdf(source, 2)
+
+    outputs = PdfPageOperations().split(source, tmp_path / "split")
+
+    assert len(outputs) == 2
+    assert all(len(PdfReader(str(output)).pages) == 1 for output in outputs)

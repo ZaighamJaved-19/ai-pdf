@@ -17,6 +17,26 @@ class PdfPageOperations:
                 writer.add_page(page)
         return self._write(writer, output)
 
+    def split(self, input_path: Path, output_directory: Path) -> tuple[Path, ...]:
+        reader = self._reader(input_path)
+        output_directory = output_directory.expanduser().resolve()
+        output_directory.mkdir(parents=True, exist_ok=True)
+        outputs = []
+        for page_number, page in enumerate(reader.pages, start=1):
+            writer = PdfWriter()
+            writer.add_page(page)
+            output = output_directory / f"{input_path.stem}-page-{page_number}.pdf"
+            outputs.append(self._write(writer, output))
+        return tuple(outputs)
+
+    def compress(self, input_path: Path, output: Path) -> Path:
+        reader = self._reader(input_path)
+        writer = PdfWriter()
+        for page in reader.pages:
+            page.compress_content_streams()
+            writer.add_page(page)
+        return self._write(writer, output)
+
     def transform(
         self,
         input_path: Path,
