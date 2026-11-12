@@ -48,6 +48,7 @@ class _WorkspacePageState extends State<WorkspacePage> {
               AppIconButton(icon: Icons.bookmark_border, tooltip: 'Bookmark page', onPressed: () => _bookmark(context)),
               AppIconButton(icon: Icons.info_outline, tooltip: 'Metadata', onPressed: () => _metadata(context)),
               AppIconButton(icon: Icons.print_outlined, tooltip: 'Print', onPressed: widget.state.printSelected),
+              AppIconButton(icon: widget.state.chatOpen ? Icons.forum : Icons.forum_outlined, tooltip: widget.state.chatOpen ? 'Collapse AI panel' : 'Open AI panel', active: widget.state.chatOpen, onPressed: widget.state.toggleChat),
               AppIconButton(icon: Icons.fullscreen, tooltip: 'Full screen', onPressed: widget.state.toggleReaderFullScreen),
             ],
           ),
@@ -79,6 +80,7 @@ class _WorkspacePageState extends State<WorkspacePage> {
                 initialPage: document.lastPage,
                 mode: mode,
                 zoom: widget.state.readerZoom,
+                cacheEnabled: widget.state.cacheEnabled,
                 onPageChanged: (page) {
                   if (page != null) {
                     widget.state.currentPage = page;
@@ -87,7 +89,17 @@ class _WorkspacePageState extends State<WorkspacePage> {
                 },
                 onPassword: () => _passwordDialog(context),
               )),
-              if (widget.state.chatOpen) SizedBox(width: 330, child: ChatPanel(state: widget.state)),
+              if (widget.state.chatOpen) ...[
+                MouseRegion(
+                  cursor: SystemMouseCursors.resizeColumn,
+                  child: GestureDetector(
+                    behavior: HitTestBehavior.translucent,
+                    onHorizontalDragUpdate: (details) => widget.state.setAiPanelWidth(widget.state.aiPanelWidth - details.delta.dx),
+                    child: const SizedBox(width: 5),
+                  ),
+                ),
+                SizedBox(width: widget.state.aiPanelWidth, child: ChatPanel(state: widget.state)),
+              ],
             ],
           ),
         ),
@@ -281,6 +293,7 @@ class _PdfReader extends StatefulWidget {
     required this.initialPage,
     required this.mode,
     required this.zoom,
+    required this.cacheEnabled,
     required this.onPageChanged,
     required this.onPassword,
     super.key,
@@ -290,6 +303,7 @@ class _PdfReader extends StatefulWidget {
   final int initialPage;
   final ReaderMode mode;
   final double zoom;
+  final bool cacheEnabled;
   final ValueChanged<int?> onPageChanged;
   final Future<String?> Function() onPassword;
 
@@ -358,9 +372,9 @@ class _PdfReaderState extends State<_PdfReader> {
   Widget build(BuildContext context) {
     final params = PdfViewerParams(
       backgroundColor: Theme.of(context).brightness == Brightness.dark ? const Color(0xFF090D14) : const Color(0xFFE6E9EF),
-      maxImageBytesCachedOnMemory: 64 * 1024 * 1024,
-      horizontalCacheExtent: .5,
-      verticalCacheExtent: .75,
+      maxImageBytesCachedOnMemory: widget.cacheEnabled ? 64 * 1024 * 1024 : 1,
+      horizontalCacheExtent: widget.cacheEnabled ? .5 : 0,
+      verticalCacheExtent: widget.cacheEnabled ? .75 : 0,
       enableTextSelection: true,
       pagePaintCallbacks: [searcher.pageTextMatchPaintCallback],
       onPageChanged: widget.onPageChanged,

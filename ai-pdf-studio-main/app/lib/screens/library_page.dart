@@ -66,21 +66,57 @@ class LibraryPage extends StatelessWidget {
           const SectionLabel('Recent documents'),
           const SizedBox(height: 12),
           Expanded(
-            child: GridView.builder(
-              gridDelegate: const SliverGridDelegateWithMaxCrossAxisExtent(
-                maxCrossAxisExtent: 330,
-                mainAxisExtent: 190,
-                crossAxisSpacing: 14,
-                mainAxisSpacing: 14,
-              ),
-              itemCount: documents.length,
-              itemBuilder: (context, index) => _DocumentCard(state: state, document: documents[index]),
-            ),
+            child: documents.isEmpty
+                ? _EmptyLibrary(state: state, filtered: filtered)
+                : GridView.builder(
+                    gridDelegate: const SliverGridDelegateWithMaxCrossAxisExtent(
+                      maxCrossAxisExtent: 330,
+                      mainAxisExtent: 190,
+                      crossAxisSpacing: 14,
+                      mainAxisSpacing: 14,
+                    ),
+                    itemCount: documents.length,
+                    itemBuilder: (context, index) => _DocumentCard(state: state, document: documents[index]),
+                  ),
           ),
         ],
         ),
       ),
     );
+  }
+
+  class _EmptyLibrary extends StatelessWidget {
+    const _EmptyLibrary({required this.state, required this.filtered});
+
+    final AppState state;
+    final bool filtered;
+
+    @override
+    Widget build(BuildContext context) {
+      final title = filtered && state.navigationIndex == 2 ? 'No favorites yet' : 'Your library is ready';
+      final message = filtered && state.navigationIndex == 2
+          ? 'Star a document to keep it close at hand.'
+          : 'Import a PDF to start reading, searching, and asking questions.';
+      return Center(
+        child: SurfaceCard(
+          padding: const EdgeInsets.all(28),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(Icons.folder_open_outlined, size: 42, color: Theme.of(context).colorScheme.primary),
+              const SizedBox(height: 14),
+              Text(title, style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 17)),
+              const SizedBox(height: 8),
+              Text(message, textAlign: TextAlign.center, style: TextStyle(color: Theme.of(context).colorScheme.onSurfaceVariant)),
+              if (!filtered || state.navigationIndex != 2) ...[
+                const SizedBox(height: 18),
+                FilledButton.icon(onPressed: state.pickAndImport, icon: const Icon(Icons.add), label: const Text('Import PDF')),
+              ],
+            ],
+          ),
+        ),
+      );
+    }
   }
 }
 

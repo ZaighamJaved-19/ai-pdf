@@ -2,7 +2,8 @@
 
 This directory contains the professional Flutter workspace UI. Documents, reading
 positions, favorites, PDF inspection, and AI chat are backed by the authenticated
-JSON-RPC sidecar.
+JSON-RPC sidecar. Workspace preferences, onboarding completion, sidebar layout,
+theme, and reader settings are persisted locally with `shared_preferences`.
 
 ## Run on Windows
 

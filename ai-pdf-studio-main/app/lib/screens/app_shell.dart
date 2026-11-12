@@ -8,6 +8,8 @@ import 'library_page.dart';
 import 'settings_page.dart';
 import 'tools_page.dart';
 import 'workspace_page.dart';
+import 'info_page.dart';
+import 'onboarding_page.dart';
 
 class AppShell extends StatelessWidget {
   const AppShell({required this.state, super.key});
@@ -16,6 +18,10 @@ class AppShell extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    if (!state.onboardingCompleted) return OnboardingPage(state: state);
+    if (state.infoPage != null) {
+      return InfoPage(title: state.infoPage!, onBack: state.closeInfoPage);
+    }
     return Shortcuts(
       shortcuts: <LogicalKeySet, Intent>{
         LogicalKeySet(LogicalKeyboardKey.control, LogicalKeyboardKey.keyO): const _OpenIntent(),
@@ -78,11 +84,15 @@ class _Sidebar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      width: 224,
-      color: Theme.of(context).navigationRailTheme.backgroundColor,
-      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 18),
-      child: Column(
+    final width = state.leftSidebarCollapsed ? 72 : state.leftSidebarWidth;
+    return Row(
+      children: [
+        AnimatedContainer(
+          duration: const Duration(milliseconds: 180),
+          width: width,
+          color: Theme.of(context).navigationRailTheme.backgroundColor,
+          padding: EdgeInsets.symmetric(horizontal: state.leftSidebarCollapsed ? 10 : 14, vertical: 18),
+          child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Row(
@@ -96,38 +106,57 @@ class _Sidebar extends StatelessWidget {
                 ),
                 child: const Icon(Icons.auto_awesome, size: 19),
               ),
-              const SizedBox(width: 10),
-              const Text('AI PDF Studio', style: TextStyle(fontWeight: FontWeight.w700)),
+              if (!state.leftSidebarCollapsed) ...[
+                const SizedBox(width: 10),
+                const Expanded(child: Text('AI PDF Studio', style: TextStyle(fontWeight: FontWeight.w700))),
+              ],
+              IconButton(
+                tooltip: state.leftSidebarCollapsed ? 'Expand sidebar' : 'Collapse sidebar',
+                onPressed: state.toggleSidebar,
+                icon: Icon(state.leftSidebarCollapsed ? Icons.chevron_right : Icons.chevron_left, size: 18),
+              ),
             ],
           ),
           const SizedBox(height: 28),
-          _NavButton(icon: Icons.grid_view_rounded, label: 'Library', selected: state.navigationIndex == 0, onTap: () => state.setNavigation(0)),
-          _NavButton(icon: Icons.description_outlined, label: 'Recent', selected: state.navigationIndex == 1, onTap: () => state.setNavigation(1)),
-          _NavButton(icon: Icons.star_outline_rounded, label: 'Favorites', selected: state.navigationIndex == 2, onTap: () => state.setNavigation(2)),
-          _NavButton(icon: Icons.folder_open_outlined, label: 'Workspaces', selected: state.navigationIndex == 3, onTap: () => state.setNavigation(3)),
+          _NavButton(icon: Icons.grid_view_rounded, label: 'Library', collapsed: state.leftSidebarCollapsed, selected: state.navigationIndex == 0, onTap: () => state.setNavigation(0)),
+          _NavButton(icon: Icons.description_outlined, label: 'Recent', collapsed: state.leftSidebarCollapsed, selected: state.navigationIndex == 1, onTap: () => state.setNavigation(1)),
+          _NavButton(icon: Icons.star_outline_rounded, label: 'Favorites', collapsed: state.leftSidebarCollapsed, selected: state.navigationIndex == 2, onTap: () => state.setNavigation(2)),
+          _NavButton(icon: Icons.folder_open_outlined, label: 'Workspaces', collapsed: state.leftSidebarCollapsed, selected: state.navigationIndex == 3, onTap: () => state.setNavigation(3)),
           const SizedBox(height: 24),
-          const SectionLabel('Workspace'),
-          const SizedBox(height: 8),
-          _NavButton(icon: Icons.picture_as_pdf_outlined, label: 'Reader', selected: state.activeTool == 'Reader', onTap: () => state.setTool('Reader')),
-          _NavButton(icon: Icons.auto_awesome_outlined, label: 'AI Assistant', selected: state.activeTool == 'AI Assistant', onTap: () => state.setTool('AI Assistant')),
-          _NavButton(icon: Icons.build_outlined, label: 'PDF Tools', selected: state.activeTool == 'PDF Tools', onTap: () => state.setTool('PDF Tools')),
+          if (!state.leftSidebarCollapsed) const SectionLabel('Workspace'),
+          if (!state.leftSidebarCollapsed) const SizedBox(height: 8),
+          _NavButton(icon: Icons.picture_as_pdf_outlined, label: 'Reader', collapsed: state.leftSidebarCollapsed, selected: state.activeTool == 'Reader', onTap: () => state.setTool('Reader')),
+          _NavButton(icon: Icons.auto_awesome_outlined, label: 'AI Assistant', collapsed: state.leftSidebarCollapsed, selected: state.activeTool == 'AI Assistant', onTap: () => state.setTool('AI Assistant')),
+          _NavButton(icon: Icons.build_outlined, label: 'PDF Tools', collapsed: state.leftSidebarCollapsed, selected: state.activeTool == 'PDF Tools', onTap: () => state.setTool('PDF Tools')),
           const Spacer(),
-          _NavButton(icon: Icons.settings_outlined, label: 'Settings', selected: state.navigationIndex == 4, onTap: () => state.setNavigation(4)),
+          _NavButton(icon: Icons.settings_outlined, label: 'Settings', collapsed: state.leftSidebarCollapsed, selected: state.navigationIndex == 4, onTap: () => state.setNavigation(4)),
           const SizedBox(height: 12),
-          const Text('v0.1.0  ·  Local-first', style: TextStyle(fontSize: 11, color: Color(0xFF7E899D))),
+          if (!state.leftSidebarCollapsed) const Text('v0.1.0  ·  Local-first', style: TextStyle(fontSize: 11, color: Color(0xFF7E899D))),
         ],
       ),
+          ),
+        ),
+        MouseRegion(
+          cursor: SystemMouseCursors.resizeColumn,
+          child: GestureDetector(
+            behavior: HitTestBehavior.translucent,
+            onHorizontalDragUpdate: (details) => state.setSidebarWidth(state.leftSidebarWidth + details.delta.dx),
+            child: const SizedBox(width: 5),
+          ),
+        ),
+      ],
     );
   }
 }
 
 class _NavButton extends StatelessWidget {
-  const _NavButton({required this.icon, required this.label, required this.selected, required this.onTap});
+  const _NavButton({required this.icon, required this.label, required this.selected, required this.onTap, this.collapsed = false});
 
   final IconData icon;
   final String label;
   final bool selected;
   final VoidCallback onTap;
+  final bool collapsed;
 
   @override
   Widget build(BuildContext context) {
@@ -142,10 +171,13 @@ class _NavButton extends StatelessWidget {
           child: Padding(
             padding: const EdgeInsets.symmetric(horizontal: 11, vertical: 10),
             child: Row(
+              mainAxisAlignment: collapsed ? MainAxisAlignment.center : MainAxisAlignment.start,
               children: [
                 Icon(icon, size: 18, color: selected ? Theme.of(context).colorScheme.primary : null),
-                const SizedBox(width: 11),
-                Text(label, style: TextStyle(fontSize: 13, fontWeight: selected ? FontWeight.w600 : FontWeight.w400)),
+                if (!collapsed) ...[
+                  const SizedBox(width: 11),
+                  Expanded(child: Text(label, style: TextStyle(fontSize: 13, fontWeight: selected ? FontWeight.w600 : FontWeight.w400))),
+                ],
               ],
             ),
           ),
@@ -179,6 +211,15 @@ class _TopBar extends StatelessWidget {
             ),
           ),
           const SizedBox(width: 12),
+          SegmentedButton<String>(
+            segments: const [
+              ButtonSegment(value: 'Reading', icon: Icon(Icons.menu_book_outlined), label: Text('Reading')),
+              ButtonSegment(value: 'AI', icon: Icon(Icons.auto_awesome_outlined), label: Text('AI')),
+            ],
+            selected: {state.workspaceMode},
+            onSelectionChanged: (value) => state.setWorkspaceMode(value.first),
+          ),
+          const SizedBox(width: 8),
           AppIconButton(icon: Icons.light_mode_outlined, tooltip: 'Toggle theme', onPressed: state.toggleTheme),
           AppIconButton(icon: Icons.notifications_none_rounded, tooltip: 'Notifications', onPressed: () {}),
           const SizedBox(width: 10),
@@ -204,7 +245,7 @@ class _Content extends StatelessWidget {
     if (state.navigationIndex != 0 && state.activeTool == 'Reader') {
       return LibraryPage(state: state, filtered: true);
     }
-    if (state.activeTool == 'AI Assistant') return ChatPanel(state: state, fullPage: true);
+    if (state.activeTool == 'AI Assistant' || state.workspaceMode == 'AI') return ChatPanel(state: state, fullPage: true);
     if (state.activeTool == 'PDF Tools') return ToolsPage(state: state);
     return state.selectedDocument == null ? LibraryPage(state: state) : WorkspacePage(state: state);
   }

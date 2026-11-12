@@ -4,6 +4,7 @@ import 'dart:io';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:printing/printing.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 import 'di/container.dart';
 import 'models.dart';
@@ -14,12 +15,16 @@ class AppState extends ChangeNotifier {
   }
 
   final AppContainer container;
-  ThemeMode themeMode = ThemeMode.dark;
+  ThemeMode themeMode = ThemeMode.system;
   int navigationIndex = 0;
   PdfDocumentModel? selectedDocument;
   PdfDocumentDetails? selectedDetails;
   String activeTool = 'Reader';
   bool chatOpen = true;
+  double leftSidebarWidth = 224;
+  double aiPanelWidth = 330;
+  bool leftSidebarCollapsed = false;
+  String workspaceMode = 'Reading';
   bool readerFullScreen = false;
   double readerZoom = 1;
   int currentPage = 1;
@@ -37,9 +42,21 @@ class AppState extends ChangeNotifier {
   PdfDocumentModel? get activeTab => selectedDocument;
   final chatMessages = <ChatMessage>[];
   final bookmarks = <int>{};
+  bool onboardingCompleted = false;
+  String? infoPage;
+  double defaultZoom = 1;
+  String openingBehavior = 'Restore last page';
+  String language = 'English';
+  String exportFormat = 'PDF';
+  String downloadFolder = '';
+  bool cacheEnabled = true;
+  int recentDocumentLimit = 20;
+  SharedPreferences? _preferences;
 
   Future<void> _initialize() async {
     try {
+      _preferences = await SharedPreferences.getInstance();
+      _loadPreferences();
       await container.start();
       await refreshDocuments();
     } catch (error) {
@@ -47,6 +64,126 @@ class AppState extends ChangeNotifier {
       isLoading = false;
       notifyListeners();
     }
+  }
+
+  void _loadPreferences() {
+      final preferences = _preferences;
+      if (preferences == null) return;
+      final theme = preferences.getString('themeMode');
+      themeMode = ThemeMode.values.firstWhere(
+        (value) => value.name == theme,
+        orElse: () => ThemeMode.system,
+      );
+      onboardingCompleted = preferences.getBool('onboardingCompleted') ?? false;
+      leftSidebarWidth = preferences.getDouble('leftSidebarWidth') ?? 224;
+      aiPanelWidth = preferences.getDouble('aiPanelWidth') ?? 330;
+      leftSidebarCollapsed = preferences.getBool('leftSidebarCollapsed') ?? false;
+      defaultZoom = preferences.getDouble('defaultZoom') ?? 1;
+      readerZoom = defaultZoom;
+      openingBehavior = preferences.getString('openingBehavior') ?? 'Restore last page';
+      language = preferences.getString('language') ?? 'English';
+      exportFormat = preferences.getString('exportFormat') ?? 'PDF';
+      downloadFolder = preferences.getString('downloadFolder') ?? '';
+      cacheEnabled = preferences.getBool('cacheEnabled') ?? true;
+      recentDocumentLimit = preferences.getInt('recentDocumentLimit') ?? 20;
+    }
+
+  Future<void> _savePreference(String key, Object value) async {
+      final preferences = _preferences;
+      if (preferences == null) return;
+      if (value is bool) await preferences.setBool(key, value);
+      if (value is double) await preferences.setDouble(key, value);
+      if (value is int) await preferences.setInt(key, value);
+      if (value is String) await preferences.setString(key, value);
+    }
+
+  void setThemeMode(ThemeMode value) {
+      themeMode = value;
+      unawaited(_savePreference('themeMode', value.name));
+      notifyListeners();
+    }
+
+  void completeOnboarding() {
+      onboardingCompleted = true;
+      unawaited(_savePreference('onboardingCompleted', true));
+      notifyListeners();
+    }
+
+  void setSidebarWidth(double value) {
+      leftSidebarWidth = value.clamp(180, 360).toDouble();
+      unawaited(_savePreference('leftSidebarWidth', leftSidebarWidth));
+      notifyListeners();
+    }
+
+  void setAiPanelWidth(double value) {
+      aiPanelWidth = value.clamp(280, 520).toDouble();
+      unawaited(_savePreference('aiPanelWidth', aiPanelWidth));
+      notifyListeners();
+    }
+
+  void toggleSidebar() {
+      leftSidebarCollapsed = !leftSidebarCollapsed;
+      unawaited(_savePreference('leftSidebarCollapsed', leftSidebarCollapsed));
+      notifyListeners();
+    }
+
+  void setWorkspaceMode(String value) {
+      workspaceMode = value;
+      if (value == 'AI') chatOpen = true;
+      notifyListeners();
+    }
+
+  void setDefaultZoom(double value) {
+      defaultZoom = value;
+      readerZoom = value;
+      unawaited(_savePreference('defaultZoom', value));
+      notifyListeners();
+    }
+
+  void setOpeningBehavior(String value) {
+      openingBehavior = value;
+      unawaited(_savePreference('openingBehavior', value));
+      notifyListeners();
+    }
+
+  void setLanguage(String value) {
+      language = value;
+      unawaited(_savePreference('language', value));
+      notifyListeners();
+    }
+
+  void setExportFormat(String value) {
+      exportFormat = value;
+      unawaited(_savePreference('exportFormat', value));
+      notifyListeners();
+    }
+
+  void setDownloadFolder(String value) {
+      downloadFolder = value;
+      unawaited(_savePreference('downloadFolder', value));
+      notifyListeners();
+    }
+
+  void setCacheEnabled(bool value) {
+      cacheEnabled = value;
+      unawaited(_savePreference('cacheEnabled', value));
+      notifyListeners();
+    }
+
+  void setRecentDocumentLimit(int value) {
+      recentDocumentLimit = value;
+      unawaited(_savePreference('recentDocumentLimit', value));
+      notifyListeners();
+    }
+
+  void openInfoPage(String page) {
+      infoPage = page;
+      notifyListeners();
+    }
+
+  void closeInfoPage() {
+      infoPage = null;
+      notifyListeners();
   }
 
   Future<void> refreshDocuments() async {
@@ -57,6 +194,9 @@ class AppState extends ChangeNotifier {
         query: searchController.text.trim(),
         favorites: navigationIndex == 2,
       );
+      if (recentDocumentLimit > 0 && navigationIndex == 1 && documents.length > recentDocumentLimit) {
+        documents = documents.take(recentDocumentLimit).toList();
+      }
       isLoading = false;
       notifyListeners();
     } catch (error) {
@@ -78,7 +218,9 @@ class AppState extends ChangeNotifier {
     try {
       selectedDetails = await container.documents.open(document);
       currentPage = selectedDetails!.pageCount > 0
-          ? document.lastPage.clamp(1, selectedDetails!.pageCount).toInt()
+          ? (openingBehavior == 'Start from first page'
+              ? 1
+              : document.lastPage.clamp(1, selectedDetails!.pageCount).toInt())
           : 1;
     } catch (error) {
       errorMessage = error.toString();
@@ -187,8 +329,7 @@ class AppState extends ChangeNotifier {
   }
 
   void toggleTheme() {
-    themeMode = themeMode == ThemeMode.dark ? ThemeMode.light : ThemeMode.dark;
-    notifyListeners();
+    setThemeMode(themeMode == ThemeMode.dark ? ThemeMode.light : ThemeMode.dark);
   }
 
   Future<void> toggleFavorite(PdfDocumentModel document) async {
