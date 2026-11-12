@@ -1,14 +1,18 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
+import 'package:flutter_markdown/flutter_markdown.dart';
+import 'package:flutter_math_fork/flutter_math.dart';
 
 import '../app_state.dart';
 import '../models.dart';
 import '../widgets/common.dart';
 
 class ChatPanel extends StatelessWidget {
-  const ChatPanel({required this.state, super.key, this.fullPage = false});
+  const ChatPanel({required this.state, super.key, this.fullPage = false, this.onCitationPage});
 
   final AppState state;
   final bool fullPage;
+  final ValueChanged<int>? onCitationPage;
 
   @override
   Widget build(BuildContext context) {
@@ -18,16 +22,16 @@ class ChatPanel extends StatelessWidget {
         Expanded(
           child: ListView.builder(
             padding: const EdgeInsets.all(16),
-            itemCount: state.chatMessages.length + (state.isProcessing ? 1 : 0),
+            itemCount: state.chatMessages.length + (state.streamingResponse.isNotEmpty ? 1 : 0),
             itemBuilder: (context, index) {
               if (index == state.chatMessages.length) {
-                return const Padding(
-                  padding: EdgeInsets.only(top: 10),
-                  child: Align(alignment: Alignment.centerLeft, child: _TypingIndicator()),
+                return _Message(
+                  message: ChatMessage(text: state.streamingResponse, isUser: false),
+                  onCitationPage: onCitationPage,
                 );
               }
               final message = state.chatMessages[index];
-              return _Message(message: message);
+              return _Message(message: message, onCitationPage: onCitationPage);
             },
           ),
         ),
@@ -66,18 +70,53 @@ class _ChatHeader extends StatelessWidget {
           ),
           const SizedBox(width: 9),
           const Expanded(child: Text('AI Assistant', style: TextStyle(fontWeight: FontWeight.w700))),
+          AppIconButton(icon: Icons.history, tooltip: 'Conversation history', onPressed: () => _history(context)),
+          AppIconButton(icon: Icons.add, tooltip: 'New conversation', onPressed: state.newConversation),
+          AppIconButton(icon: Icons.delete_sweep_outlined, tooltip: 'Clear conversation', onPressed: state.clearChat),
           AppIconButton(icon: Icons.tune_rounded, tooltip: 'AI settings', onPressed: () {}),
           AppIconButton(icon: Icons.close, tooltip: 'Close assistant', onPressed: state.toggleChat),
         ],
       ),
     );
   }
+
+  void _history(BuildContext context) {
+    showModalBottomSheet<void>(
+      context: context,
+      builder: (context) => SafeArea(
+        child: ListView(
+          shrinkWrap: true,
+          children: [
+            const ListTile(title: Text('Conversation history')),
+            ...state.conversations.map(
+              (conversation) => ListTile(
+                title: Text(conversation.title),
+                subtitle: Text(conversation.documentPath.split(RegExp(r'[/\\]')).last),
+                onTap: () {
+                  state.openConversation(conversation);
+                  Navigator.pop(context);
+                },
+                trailing: IconButton(
+                  icon: const Icon(Icons.delete_outline),
+                  onPressed: () {
+                    state.deleteConversation(conversation.id);
+                    Navigator.pop(context);
+                  },
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
 }
 
 class _Message extends StatelessWidget {
-  const _Message({required this.message});
+  const _Message({required this.message, this.onCitationPage});
 
   final ChatMessage message;
+  final ValueChanged<int>? onCitationPage;
 
   @override
   Widget build(BuildContext context) {
@@ -96,15 +135,35 @@ class _Message extends StatelessWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text(message.text, style: TextStyle(fontSize: 13, height: 1.45, color: isUser ? Colors.white : null)),
-            if (message.citation != null) ...[
+            if (!isUser && message.text.contains(r'$$'))
+              Math.tex(message.text.replaceAll(r'$$', ''), textStyle: const TextStyle(fontSize: 14))
+            else if (!isUser)
+              MarkdownBody(
+                data: message.text,
+                selectable: true,
+                styleSheet: MarkdownStyleSheet.fromTheme(Theme.of(context)).copyWith(p: const TextStyle(fontSize: 13, height: 1.45)),
+                onTapLink: (_, __, ___) {},
+              )
+            else
+              Text(message.text, style: const TextStyle(fontSize: 13, height: 1.45, color: Colors.white)),
+            if (message.citations.isNotEmpty) ...[
               const SizedBox(height: 10),
-              Row(children: [
-                Icon(Icons.link, size: 13, color: Theme.of(context).colorScheme.primary),
-                const SizedBox(width: 4),
-                Text(message.citation!, style: TextStyle(fontSize: 11, color: Theme.of(context).colorScheme.primary, fontWeight: FontWeight.w600)),
-              ]),
+              Wrap(
+                spacing: 6,
+                runSpacing: 6,
+                children: message.citations.map((citation) => ActionChip(
+                  avatar: const Icon(Icons.link, size: 13),
+                  label: Text('Page ${citation.pageNumber}'),
+                  onPressed: () => onCitationPage?.call(citation.pageNumber),
+                )).toList(),
+              ),
             ],
+            if (!isUser) Row(
+              mainAxisAlignment: MainAxisAlignment.end,
+              children: [
+                IconButton(icon: const Icon(Icons.copy, size: 15), tooltip: 'Copy', onPressed: () => Clipboard.setData(ClipboardData(text: message.text))),
+              ],
+            ),
           ],
         ),
       ),
@@ -132,18 +191,44 @@ class _ChatComposer extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    Future<void> send() async {
+      if (!state.hasConsentForSelectedDocument()) {
+        final approved = await showDialog<bool>(
+          context: context,
+          builder: (context) => AlertDialog(
+            title: const Text('Allow document sharing?'),
+            content: Text('Your selected document will be sent to ${state.provider} to answer this question.'),
+            actions: [
+              TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Cancel')),
+              FilledButton(onPressed: () => Navigator.pop(context, true), child: const Text('Allow')),
+            ],
+          ),
+        );
+        if (approved != true) return;
+        state.grantConsentForSelectedDocument();
+      }
+      await state.sendMessage();
+    }
+
     return Padding(
       padding: const EdgeInsets.all(14),
       child: Column(
         children: [
+          if (state.indexingJobId != null)
+            Padding(
+              padding: const EdgeInsets.only(bottom: 8),
+              child: LinearProgressIndicator(value: state.indexingProgress),
+            ),
           TextField(
             controller: state.chatController,
             minLines: 1,
             maxLines: 4,
-            onSubmitted: (_) => state.sendMessage(),
+            onSubmitted: (_) => send(),
             decoration: InputDecoration(
               hintText: 'Ask about this document…',
-              suffixIcon: IconButton(onPressed: state.sendMessage, icon: const Icon(Icons.arrow_upward_rounded)),
+              suffixIcon: state.isProcessing
+                  ? IconButton(onPressed: state.stopChat, icon: const Icon(Icons.stop_circle_outlined))
+                  : IconButton(onPressed: send, icon: const Icon(Icons.arrow_upward_rounded)),
             ),
           ),
           const SizedBox(height: 8),
@@ -151,7 +236,7 @@ class _ChatComposer extends StatelessWidget {
             Icon(Icons.lock_outline, size: 12, color: Theme.of(context).colorScheme.onSurfaceVariant),
             const SizedBox(width: 5),
             Text(
-              state.apiKey.isEmpty ? 'Add an OpenAI key in Settings' : 'Only this document · OpenAI',
+              state.apiKey.isEmpty ? 'Add a provider key in Settings' : 'Only this document · ${state.provider}',
               style: TextStyle(fontSize: 10, color: Theme.of(context).colorScheme.onSurfaceVariant),
             ),
           ]),

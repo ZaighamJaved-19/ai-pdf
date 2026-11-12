@@ -48,3 +48,18 @@ def test_untrusted_citation_is_not_returned() -> None:
         consent=Consent.grant("openai", "doc", "chat"),
     )
     assert answer.citations == ()
+
+
+def test_chat_returns_not_found_path_without_provider_call() -> None:
+    retriever = LocalRetriever()
+    retriever.index("doc", [PdfPageText(page_number=1, text="Only the budget is listed.")])
+    service = PdfChatService(retriever, FakeProvider())  # type: ignore[arg-type]
+
+    answer = service.answer(
+        "launch milestone",
+        document_id="doc",
+        consent=Consent.grant("openai", "doc", "chat"),
+    )
+
+    assert answer.text == "The document does not contain enough information to answer that."
+    assert answer.citations == ()

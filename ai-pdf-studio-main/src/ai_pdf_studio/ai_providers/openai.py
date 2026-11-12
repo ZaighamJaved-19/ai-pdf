@@ -8,6 +8,11 @@ from urllib.request import Request, urlopen
 class OpenAIError(RuntimeError):
     """Raised when an OpenAI request fails or returns invalid data."""
 
+    def __init__(self, message: str, *, kind: str = "Provider", status: int | None = None):
+        super().__init__(message)
+        self.kind = kind
+        self.status = status
+
 
 @dataclass(frozen=True, slots=True)
 class ChatMessage:
@@ -79,8 +84,10 @@ class OpenAIClient:
         request = self._request_object("/chat/completions", payload)
         try:
             response = urlopen(request, timeout=self._timeout)
-        except (HTTPError, URLError, TimeoutError) as exc:
-            raise OpenAIError("OpenAI streaming request failed.") from exc
+        except HTTPError as exc:
+            raise self._http_error(exc) from exc
+        except (URLError, TimeoutError) as exc:
+            raise OpenAIError("OpenAI streaming request failed.", kind="Outage") from exc
         try:
             for raw_line in response:
                 line = raw_line.decode("utf-8").strip()
@@ -98,6 +105,19 @@ class OpenAIClient:
                     yield str(content)
         finally:
             response.close()
+
+    @staticmethod
+    def _http_error(exc: HTTPError) -> OpenAIError:
+        kind = {
+            401: "InvalidKey",
+            402: "NoCredits",
+            404: "MissingModel",
+            429: "RateLimit",
+            500: "Outage",
+            502: "Outage",
+            503: "Outage",
+        }.get(exc.code, "Provider")
+        return OpenAIError(f"OpenAI request failed ({exc.code}).", kind=kind, status=exc.code)
 
     def embeddings(
         self, texts: Sequence[str], *, model: str = "text-embedding-3-small"
@@ -118,8 +138,12 @@ class OpenAIClient:
         try:
             with urlopen(request, timeout=self._timeout) as response:
                 return json.load(response)
-        except (HTTPError, URLError, TimeoutError, json.JSONDecodeError) as exc:
-            raise OpenAIError("OpenAI request failed.") from exc
+        except HTTPError as exc:
+            raise self._http_error(exc) from exc
+        except (URLError, TimeoutError) as exc:
+            raise OpenAIError("OpenAI request failed.", kind="Outage") from exc
+        except json.JSONDecodeError as exc:
+            raise OpenAIError("OpenAI returned invalid JSON.", kind="Provider") from exc
 
     def _request_object(self, path: str, payload: dict[str, object]) -> Request:
         return Request(

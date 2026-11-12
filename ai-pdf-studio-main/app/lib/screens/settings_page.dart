@@ -161,7 +161,26 @@ class _SettingsPageState extends State<SettingsPage> {
           subtitle: 'Keys are kept locally and sent only with your consent',
           child: Column(
             children: [
-              _SettingRow(label: 'Provider', description: 'The service used for document questions', trailing: const Chip(label: Text('OpenAI'))),
+              _SettingRow(
+                label: 'Provider',
+                description: 'The service used for document questions',
+                trailing: SizedBox(
+                  width: 170,
+                  child: DropdownButtonFormField<String>(
+                    value: state.provider,
+                    items: const [
+                      DropdownMenuItem(value: 'OpenAI', child: Text('OpenAI')),
+                      DropdownMenuItem(value: 'Anthropic', child: Text('Anthropic')),
+                    ],
+                    onChanged: (value) {
+                      if (value != null) {
+                        state.setProvider(value);
+                        setState(() {});
+                      }
+                    },
+                  ),
+                ),
+              ),
               const Divider(height: 28),
               TextField(controller: keyController, obscureText: true, decoration: const InputDecoration(labelText: 'OpenAI API key', hintText: 'sk-…', prefixIcon: Icon(Icons.key_outlined))),
               const SizedBox(height: 12),
@@ -171,17 +190,52 @@ class _SettingsPageState extends State<SettingsPage> {
                     child: DropdownButtonFormField<String>(
                       value: state.model,
                       decoration: const InputDecoration(labelText: 'Model'),
-                      items: const [
-                        DropdownMenuItem(value: 'gpt-4o-mini', child: Text('GPT-4o mini')),
-                        DropdownMenuItem(value: 'gpt-4o', child: Text('GPT-4o')),
-                      ],
+                      items: state.provider == 'Anthropic'
+                          ? const [
+                              DropdownMenuItem(value: 'claude-3-5-sonnet-latest', child: Text('Claude 3.5 Sonnet')),
+                              DropdownMenuItem(value: 'claude-3-5-haiku-latest', child: Text('Claude 3.5 Haiku')),
+                            ]
+                          : const [
+                              DropdownMenuItem(value: 'gpt-4o-mini', child: Text('GPT-4o mini')),
+                              DropdownMenuItem(value: 'gpt-4o', child: Text('GPT-4o')),
+                            ],
                       onChanged: (value) {
-                        if (value != null) state.model = value;
+                        if (value != null) state.setModel(value);
                       },
                     ),
                   ),
                   const SizedBox(width: 12),
-                  FilledButton(onPressed: () => state.saveProviderSettings(keyController.text, state.model), child: const Text('Save locally')),
+                  FilledButton(onPressed: () => state.saveProviderSettings(keyController.text, state.model), child: const Text('Save securely')),
+                ],
+              ),
+              const SizedBox(height: 16),
+              _SettingRow(
+                label: 'Temperature',
+                description: 'Lower values are more focused; higher values are more creative',
+                trailing: SizedBox(width: 220, child: Slider(value: state.temperature, min: 0, max: 1, divisions: 20, label: state.temperature.toStringAsFixed(2), onChanged: state.setTemperature)),
+              ),
+              const Divider(height: 28),
+              _SettingRow(
+                label: 'Response length',
+                description: 'Maximum tokens returned by the provider',
+                trailing: _Dropdown<int>(value: state.maxTokens, values: const [600, 1200, 2400, 4000], onChanged: state.setMaxTokens),
+              ),
+              const Divider(height: 28),
+              _SettingRow(
+                label: 'Usage limit',
+                description: 'Optional local response-token limit per request',
+                trailing: _Dropdown<int>(value: state.usageLimit, values: const [0, 10000, 50000, 100000], onChanged: state.setUsageLimit),
+              ),
+              const SizedBox(height: 12),
+              Row(
+                children: [
+                  OutlinedButton.icon(
+                    onPressed: state.isTestingProvider ? null : state.testProviderConnection,
+                    icon: state.isTestingProvider ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2)) : const Icon(Icons.wifi_tethering),
+                    label: const Text('Test connectivity'),
+                  ),
+                  const SizedBox(width: 12),
+                  if (state.providerStatus != null) Expanded(child: Text(state.providerStatus!, style: TextStyle(color: state.providerStatus!.startsWith('Connection') ? Colors.green : Theme.of(context).colorScheme.error))),
                 ],
               ),
             ],
@@ -196,6 +250,28 @@ class _SettingsPageState extends State<SettingsPage> {
               _SettingRow(label: 'Document consent', description: 'AI requests require explicit per-document approval', trailing: const Chip(label: Text('Always required'))),
               const Divider(height: 28),
               _SettingRow(label: 'Telemetry', description: 'Share anonymous, content-free diagnostics', trailing: Switch(value: false, onChanged: (_) {})),
+              const Divider(height: 28),
+              Wrap(
+                spacing: 10,
+                runSpacing: 10,
+                children: [
+                  OutlinedButton.icon(
+                    onPressed: state.deleteAllChatHistory,
+                    icon: const Icon(Icons.delete_sweep_outlined),
+                    label: const Text('Delete chat history'),
+                  ),
+                  OutlinedButton.icon(
+                    onPressed: state.deleteCache,
+                    icon: const Icon(Icons.delete_outline),
+                    label: const Text('Delete cache'),
+                  ),
+                  OutlinedButton.icon(
+                    onPressed: state.exportUserData,
+                    icon: const Icon(Icons.download_outlined),
+                    label: const Text('Export user data'),
+                  ),
+                ],
+              ),
             ],
           ),
         ),

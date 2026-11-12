@@ -8,12 +8,14 @@ class SidecarSupervisor {
   SidecarSupervisor({this.onNotification});
 
   final RpcNotificationHandler? onNotification;
+  final _notifications = StreamController<Map<String, dynamic>>.broadcast();
   RpcClient? _client;
   Process? _process;
   Timer? _healthTimer;
   var _stopping = false;
 
   bool get isRunning => _client != null;
+  Stream<Map<String, dynamic>> get notifications => _notifications.stream;
 
   Future<void> start() async {
     if (isRunning) return;
@@ -38,7 +40,10 @@ class SidecarSupervisor {
           )
         : await Process.start(executable, ['--token', token]);
     _process = process;
-    final client = RpcClient(process: process, token: token, onNotification: onNotification);
+    final client = RpcClient(process: process, token: token, onNotification: (method, params) {
+      onNotification?.call(method, params);
+      _notifications.add({'method': method, 'params': params});
+    });
     _client = client;
     await client.request('system.handshake', {'clientContractVersion': '1.0.0'});
     _healthTimer = Timer.periodic(const Duration(seconds: 5), (_) => _checkHealth());

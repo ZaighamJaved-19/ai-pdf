@@ -1,8 +1,10 @@
 from dataclasses import dataclass
 import io
+import os
 from pathlib import Path
 import shutil
 import subprocess
+import tempfile
 
 from pypdf import PdfReader
 
@@ -35,6 +37,14 @@ class RedactionService:
             from PIL import Image, ImageDraw
         except ImportError as exc:
             raise RedactionError("True redaction requires Pillow.") from exc
+        input_path = input_path.expanduser().resolve()
+        output = output.expanduser().resolve()
+        if input_path == output:
+            raise RedactionError("Redaction must write a new PDF; the source cannot be overwritten.")
+        if not input_path.is_file():
+            raise RedactionError(f"PDF does not exist: {input_path}")
+        if input_path.stat().st_size > 512 * 1024 * 1024:
+            raise RedactionError("PDF exceeds the safe 512 MB processing limit.")
         reader = PdfReader(str(input_path), strict=False)
         requests_by_page: dict[int, list[RedactionRequest]] = {}
         for request in requests:
@@ -70,7 +80,41 @@ class RedactionService:
                     fill="black",
                 )
             images.append(image)
-        output = output.expanduser().resolve()
         output.parent.mkdir(parents=True, exist_ok=True)
-        images[0].save(output, "PDF", resolution=150.0, save_all=True, append_images=images[1:])
+        fd, temporary = tempfile.mkstemp(prefix=".pdf-redaction-", suffix=".pdf", dir=output.parent)
+        os.close(fd)
+        temporary_path = Path(temporary)
+        try:
+            images[0].save(temporary_path, "PDF", resolution=150.0, save_all=True, append_images=images[1:])
+            os.replace(temporary_path, output)
+        finally:
+            temporary_path.unlink(missing_ok=True)
+        if any((page.extract_text() or "").strip() for page in PdfReader(str(output), strict=False).pages):
+            raise RedactionError("Redaction verification failed: searchable text remains.")
         return output
+
+    def redact_terms(self, input_path: Path, output: Path, terms: tuple[str, ...]) -> Path:
+        """Redact matching pages completely, then verify no term remains searchable."""
+        normalized = tuple(term.strip().casefold() for term in terms if term.strip())
+        if not normalized:
+            raise RedactionError("At least one search term is required.")
+        reader = PdfReader(str(input_path), strict=False)
+        requests = tuple(
+            RedactionRequest(
+                page_number=index,
+                left=float(page.mediabox.left),
+                bottom=float(page.mediabox.bottom),
+                right=float(page.mediabox.right),
+                top=float(page.mediabox.top),
+            )
+            for index, page in enumerate(reader.pages, start=1)
+            if any(term in (page.extract_text() or "").casefold() for term in normalized)
+        )
+        if not requests:
+            raise RedactionError("No matching text was found in the document.")
+        result = self.redact(input_path, output, requests)
+        verification_reader = PdfReader(str(result), strict=False)
+        remaining = "\n".join(page.extract_text() or "" for page in verification_reader.pages).casefold()
+        if any(term in remaining for term in normalized):
+            raise RedactionError("Redaction verification failed: a search term remains.")
+        return result

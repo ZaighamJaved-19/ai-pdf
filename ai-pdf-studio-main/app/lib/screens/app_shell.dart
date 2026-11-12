@@ -11,6 +11,7 @@ import 'workspace_page.dart';
 import 'info_page.dart';
 import 'onboarding_page.dart';
 import 'collections_page.dart';
+import 'ai_tools_page.dart';
 
 class AppShell extends StatelessWidget {
   const AppShell({required this.state, super.key});
@@ -130,6 +131,7 @@ class _Sidebar extends StatelessWidget {
           if (!state.leftSidebarCollapsed) const SizedBox(height: 8),
           _NavButton(icon: Icons.picture_as_pdf_outlined, label: 'Reader', collapsed: state.leftSidebarCollapsed, selected: state.activeTool == 'Reader', onTap: () => state.setTool('Reader')),
           _NavButton(icon: Icons.auto_awesome_outlined, label: 'AI Assistant', collapsed: state.leftSidebarCollapsed, selected: state.activeTool == 'AI Assistant', onTap: () => state.setTool('AI Assistant')),
+          _NavButton(icon: Icons.auto_fix_high_outlined, label: 'AI Tools', collapsed: state.leftSidebarCollapsed, selected: state.activeTool == 'AI Tools', onTap: () => state.setTool('AI Tools')),
           _NavButton(icon: Icons.build_outlined, label: 'PDF Tools', collapsed: state.leftSidebarCollapsed, selected: state.activeTool == 'PDF Tools', onTap: () => state.setTool('PDF Tools')),
           const Spacer(),
           _NavButton(icon: Icons.settings_outlined, label: 'Settings', collapsed: state.leftSidebarCollapsed, selected: state.navigationIndex == 6, onTap: () => state.setNavigation(6)),
@@ -230,6 +232,15 @@ class _TopBar extends StatelessWidget {
             onSelectionChanged: (value) => state.setWorkspaceMode(value.first),
           ),
           const SizedBox(width: 8),
+          Tooltip(
+            message: state.isOnline ? 'Provider online' : 'Offline or not tested',
+            child: Chip(
+              avatar: Icon(Icons.circle, size: 10, color: state.isOnline ? Colors.green : Colors.grey),
+              label: Text(state.isOnline ? 'Online' : 'Offline'),
+              visualDensity: VisualDensity.compact,
+            ),
+          ),
+          const SizedBox(width: 4),
           AppIconButton(icon: Icons.light_mode_outlined, tooltip: 'Toggle theme', onPressed: state.toggleTheme),
           AppIconButton(icon: Icons.notifications_none_rounded, tooltip: 'Notifications', onPressed: () {}),
           const SizedBox(width: 10),
@@ -259,6 +270,7 @@ class _Content extends StatelessWidget {
       return LibraryPage(state: state, filtered: true);
     }
     if (state.activeTool == 'AI Assistant' || state.workspaceMode == 'AI') return ChatPanel(state: state, fullPage: true);
+    if (state.activeTool == 'AI Tools') return AiToolsPage(state: state);
     if (state.activeTool == 'PDF Tools') return ToolsPage(state: state);
     return state.selectedDocument == null ? LibraryPage(state: state) : WorkspacePage(state: state);
   }

@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:pdfrx/pdfrx.dart';
 
@@ -33,6 +34,7 @@ class _WorkspacePageState extends State<WorkspacePage> {
   @override
   Widget build(BuildContext context) {
     final document = widget.state.selectedDocument!;
+    final readerPath = widget.state.readerPdfPath ?? document.path;
     return Column(
       children: [
         _TabBar(state: widget.state),
@@ -47,6 +49,41 @@ class _WorkspacePageState extends State<WorkspacePage> {
               Expanded(child: Text(document.name, style: const TextStyle(fontWeight: FontWeight.w600))),
               AppIconButton(icon: Icons.bookmark_border, tooltip: 'Bookmark page', onPressed: () => _bookmark(context)),
               AppIconButton(icon: Icons.info_outline, tooltip: 'Metadata', onPressed: () => _metadata(context)),
+              AppIconButton(icon: Icons.undo, tooltip: 'Undo edit', onPressed: widget.state.canUndoEdit ? widget.state.undoPdfEdit : null),
+              AppIconButton(icon: Icons.redo, tooltip: 'Redo edit', onPressed: widget.state.canRedoEdit ? widget.state.redoPdfEdit : null),
+              AppIconButton(icon: Icons.info_outline, tooltip: 'Editing policy', onPressed: () => _textPolicy(context)),
+              PopupMenuButton<String>(
+                tooltip: 'Annotate',
+                onSelected: (value) => _annotationAction(context, value),
+                itemBuilder: (_) => const [
+                  PopupMenuItem(value: 'highlight', child: Text('Highlight')),
+                  PopupMenuItem(value: 'underline', child: Text('Underline')),
+                  PopupMenuItem(value: 'strikethrough', child: Text('Strikethrough')),
+                  PopupMenuItem(value: 'comment', child: Text('Comment')),
+                  PopupMenuItem(value: 'sticky', child: Text('Sticky note')),
+                  PopupMenuItem(value: 'freehand', child: Text('Freehand')),
+                  PopupMenuItem(value: 'arrow', child: Text('Arrow')),
+                  PopupMenuItem(value: 'rectangle', child: Text('Rectangle')),
+                  PopupMenuItem(value: 'circle', child: Text('Circle')),
+                  PopupMenuItem(value: 'signature', child: Text('Signature')),
+                  PopupMenuItem(value: 'image', child: Text('Insert image')),
+                  PopupMenuItem(value: 'text', child: Text('Add text')),
+                ],
+                child: const Padding(padding: EdgeInsets.all(8), child: Icon(Icons.draw_outlined, size: 19)),
+              ),
+              PopupMenuButton<String>(
+                tooltip: 'Page operations',
+                onSelected: (value) => _pageOperation(context, value),
+                itemBuilder: (_) => const [
+                  PopupMenuItem(value: 'extract', child: Text('Extract selected pages')),
+                  PopupMenuItem(value: 'crop', child: Text('Crop current page')),
+                  PopupMenuItem(value: 'headerFooter', child: Text('Headers, footers, watermark')),
+                  PopupMenuItem(value: 'deletePage', child: Text('Delete current page')),
+                ],
+                child: const Padding(padding: EdgeInsets.all(8), child: Icon(Icons.layers_outlined, size: 19)),
+              ),
+              AppIconButton(icon: Icons.save_outlined, tooltip: 'Save', onPressed: widget.state.savePdf),
+              AppIconButton(icon: Icons.save_as_outlined, tooltip: 'Save As', onPressed: widget.state.savePdfAs),
               AppIconButton(icon: Icons.print_outlined, tooltip: 'Print', onPressed: widget.state.printSelected),
               AppIconButton(icon: widget.state.chatOpen ? Icons.forum : Icons.forum_outlined, tooltip: widget.state.chatOpen ? 'Collapse AI panel' : 'Open AI panel', active: widget.state.chatOpen, onPressed: widget.state.toggleChat),
               AppIconButton(icon: Icons.fullscreen, tooltip: 'Full screen', onPressed: widget.state.toggleReaderFullScreen),
@@ -69,14 +106,14 @@ class _WorkspacePageState extends State<WorkspacePage> {
           child: Row(
             children: [
               _ThumbnailRail(
-                path: document.path,
+                path: readerPath,
                 initialPage: document.lastPage,
                 onPageTap: (page) => readerKey.currentState?.goToPage(page),
                 onPassword: () => _passwordDialog(context),
               ),
               Expanded(child: _PdfReader(
                 key: readerKey,
-                path: document.path,
+                path: readerPath,
                 initialPage: document.lastPage,
                 mode: mode,
                 zoom: widget.state.readerZoom,
@@ -98,7 +135,13 @@ class _WorkspacePageState extends State<WorkspacePage> {
                     child: const SizedBox(width: 5),
                   ),
                 ),
-                SizedBox(width: widget.state.aiPanelWidth, child: ChatPanel(state: widget.state)),
+                SizedBox(
+                  width: widget.state.aiPanelWidth,
+                  child: ChatPanel(
+                    state: widget.state,
+                    onCitationPage: (page) => readerKey.currentState?.goToPage(page),
+                  ),
+                ),
               ],
             ],
           ),
@@ -160,6 +203,296 @@ class _WorkspacePageState extends State<WorkspacePage> {
     widget.state.bookmarks.add(widget.state.currentPage);
     ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Bookmarked page ${widget.state.currentPage}')));
   }
+
+  void _textPolicy(BuildContext context) {
+    showDialog<void>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('PDF editing policy'),
+        content: const Text(
+          'AI PDF Studio adds annotations, overlays, and page-level changes. '
+          'It does not silently rewrite existing PDF text. Existing text is only changed through an explicit reconstruction workflow, which is not enabled here.',
+        ),
+        actions: [TextButton(onPressed: () => Navigator.pop(context), child: const Text('Close'))],
+      ),
+    );
+  }
+
+  Future<void> _annotationAction(BuildContext context, String type) async {
+    if (type == 'image' || type == 'signature') {
+      final result = await FilePicker.platform.pickFiles(type: FileType.image);
+      final path = result?.files.single.path;
+      if (path == null) return;
+      await widget.state.applyPdfEdit(
+        images: [
+          {
+            'page': widget.state.currentPage,
+            'path': path,
+            'x': 50,
+            'y': 50,
+            'width': type == 'signature' ? 180 : 240,
+            'height': type == 'signature' ? 70 : 180,
+          },
+        ],
+        label: type,
+      );
+      return;
+    }
+    if (type == 'text') {
+      final controller = TextEditingController();
+      final value = await showDialog<String>(
+        context: context,
+        builder: (context) => AlertDialog(
+          title: const Text('Add text annotation'),
+          content: TextField(controller: controller, minLines: 2, maxLines: 5, autofocus: true, decoration: const InputDecoration(labelText: 'Text')),
+          actions: [
+            TextButton(onPressed: () => Navigator.pop(context), child: const Text('Cancel')),
+            FilledButton(onPressed: () => Navigator.pop(context, controller.text), child: const Text('Add')),
+          ],
+        ),
+      );
+      controller.dispose();
+      if (value == null || value.trim().isEmpty) return;
+      await widget.state.applyPdfEdit(
+        text: [
+          {'page': widget.state.currentPage, 'text': value, 'x': 50, 'y': 650, 'width': 300, 'height': 40},
+        ],
+        label: 'text',
+      );
+      return;
+    }
+    if (type == 'freehand') {
+      final points = await _freehandDialog(context);
+      if (points == null || points.length < 2) return;
+      await widget.state.applyPdfEdit(
+        annotations: [
+          {
+            'page': widget.state.currentPage,
+            'type': 'freehand',
+            'points': points,
+            'x': 0,
+            'y': 0,
+            'width': 300,
+            'height': 300,
+          },
+        ],
+        label: 'freehand',
+      );
+      return;
+    }
+    final contents = await _annotationContents(context, type);
+    if (contents == null && (type == 'comment' || type == 'sticky')) return;
+    final item = <String, dynamic>{
+      'page': widget.state.currentPage,
+      'type': type,
+      'x': 50,
+      'y': 650,
+      'width': type == 'freehand' ? 160 : 180,
+      'height': type == 'freehand' ? 80 : 30,
+      'contents': contents ?? '',
+    };
+    if (type == 'arrow') {
+      item['x1'] = 50;
+      item['y1'] = 650;
+      item['x2'] = 230;
+      item['y2'] = 700;
+    }
+    await widget.state.applyPdfEdit(annotations: [item], label: type);
+  }
+
+  Future<String?> _annotationContents(BuildContext context, String type) async {
+    if (type != 'comment' && type != 'sticky') return '';
+    final controller = TextEditingController();
+    final value = await showDialog<String>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text(type == 'sticky' ? 'Sticky note' : 'Comment'),
+        content: TextField(controller: controller, minLines: 2, maxLines: 5, autofocus: true, decoration: const InputDecoration(labelText: 'Note')),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(context), child: const Text('Cancel')),
+          FilledButton(onPressed: () => Navigator.pop(context, controller.text), child: const Text('Add')),
+        ],
+      ),
+    );
+    controller.dispose();
+    return value;
+  }
+
+  Future<void> _pageOperation(BuildContext context, String operation) async {
+    if (operation == 'deletePage') {
+      await widget.state.transformPdf(delete: [widget.state.currentPage - 1]);
+      return;
+    }
+    if (operation == 'extract') {
+      final controller = TextEditingController(text: '${widget.state.currentPage}');
+      final value = await showDialog<String>(
+        context: context,
+        builder: (context) => AlertDialog(
+          title: const Text('Extract pages'),
+          content: TextField(controller: controller, decoration: const InputDecoration(labelText: 'Pages (for example 1,3-5)')),
+          actions: [
+            TextButton(onPressed: () => Navigator.pop(context), child: const Text('Cancel')),
+            FilledButton(onPressed: () => Navigator.pop(context, controller.text), child: const Text('Extract')),
+          ],
+        ),
+      );
+      controller.dispose();
+      if (value == null) return;
+      final pages = _parsePageSelection(value);
+      if (pages.isNotEmpty) await widget.state.extractPdfPages(pages);
+      return;
+    }
+    if (operation == 'crop') {
+      final values = await _cropDialog(context);
+      if (values != null) {
+        await widget.state.applyPdfEdit(
+          crop: {'page': widget.state.currentPage.toDouble(), ...values},
+          label: 'crop',
+        );
+      }
+      return;
+    }
+    final values = await _headerFooterDialog(context);
+    if (values != null) {
+      await widget.state.applyPdfEdit(
+        header: values['header'],
+        footer: values['footer'],
+        watermark: values['watermark'],
+        label: 'overlay',
+      );
+    }
+  }
+
+  List<int> _parsePageSelection(String value) {
+    final pages = <int>{};
+    for (final part in value.split(',')) {
+      final range = part.trim().split('-').map((item) => int.tryParse(item.trim())).toList();
+      if (range.length == 1 && range.first != null) pages.add(range.first!);
+      if (range.length == 2 && range[0] != null && range[1] != null) {
+        for (var page = range[0]!; page <= range[1]!; page++) pages.add(page);
+      }
+    }
+    return pages.toList()..sort();
+  }
+
+  Future<Map<String, double>?> _cropDialog(BuildContext context) async {
+    final controllers = {
+      'x': TextEditingController(text: '0'),
+      'y': TextEditingController(text: '0'),
+      'width': TextEditingController(text: '550'),
+      'height': TextEditingController(text: '750'),
+    };
+    final value = await showDialog<Map<String, double>>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Crop current page'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: controllers.entries
+              .map((entry) => TextField(controller: entry.value, keyboardType: TextInputType.number, decoration: InputDecoration(labelText: entry.key)))
+              .toList(),
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(context), child: const Text('Cancel')),
+          FilledButton(
+            onPressed: () => Navigator.pop(context, {for (final entry in controllers.entries) entry.key: double.tryParse(entry.value.text) ?? 0}),
+            child: const Text('Crop'),
+          ),
+        ],
+      ),
+    );
+    for (final controller in controllers.values) controller.dispose();
+    return value;
+  }
+
+  Future<Map<String, String>?> _headerFooterDialog(BuildContext context) async {
+    final controllers = {
+      'header': TextEditingController(text: 'AI PDF Studio · {page}/{pages}'),
+      'footer': TextEditingController(),
+      'watermark': TextEditingController(),
+    };
+    final value = await showDialog<Map<String, String>>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Headers, footers and watermark'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: controllers.entries
+              .map((entry) => TextField(controller: entry.value, decoration: InputDecoration(labelText: entry.key)))
+              .toList(),
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(context), child: const Text('Cancel')),
+          FilledButton(
+            onPressed: () => Navigator.pop(context, {for (final entry in controllers.entries) entry.key: entry.value.text}),
+            child: const Text('Apply'),
+          ),
+        ],
+      ),
+    );
+    for (final controller in controllers.values) controller.dispose();
+    return value;
+  }
+
+  Future<List<List<double>>?> _freehandDialog(BuildContext context) {
+    return showDialog<List<List<double>>>(
+      context: context,
+      builder: (context) {
+        var points = <Offset>[];
+        return StatefulBuilder(
+          builder: (context, setState) => AlertDialog(
+            title: const Text('Draw freehand annotation'),
+            content: SizedBox(
+              width: 420,
+              height: 260,
+              child: GestureDetector(
+                onPanStart: (details) => setState(() => points = [details.localPosition]),
+                onPanUpdate: (details) => setState(() => points = [...points, details.localPosition]),
+                child: ColoredBox(
+                  color: const Color(0xFFF3F5F8),
+                  child: CustomPaint(painter: _StrokePainter(points)),
+                ),
+              ),
+            ),
+            actions: [
+              TextButton(onPressed: () => Navigator.pop(context), child: const Text('Cancel')),
+              FilledButton(
+                onPressed: () => Navigator.pop(
+                  context,
+                  points.map((point) => <double>[point.dx, 760 - point.dy]).toList(),
+                ),
+                child: const Text('Apply'),
+              ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+}
+
+class _StrokePainter extends CustomPainter {
+  const _StrokePainter(this.points);
+
+  final List<Offset> points;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    if (points.length < 2) return;
+    final paint = Paint()
+      ..color = Colors.black87
+      ..strokeWidth = 2
+      ..style = PaintingStyle.stroke
+      ..strokeCap = StrokeCap.round;
+    final path = Path()..moveTo(points.first.dx, points.first.dy);
+    for (final point in points.skip(1)) {
+      path.lineTo(point.dx, point.dy);
+    }
+    canvas.drawPath(path, paint);
+  }
+
+  @override
+  bool shouldRepaint(covariant _StrokePainter oldDelegate) => oldDelegate.points != points;
 }
 
 class _TabBar extends StatelessWidget {

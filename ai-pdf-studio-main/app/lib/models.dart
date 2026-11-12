@@ -63,6 +63,27 @@ class ContentMatch {
   final String snippet;
 }
 
+class ChatCitation {
+  const ChatCitation({required this.pageNumber, required this.text});
+
+  final int pageNumber;
+  final String text;
+}
+
+class ChatConversation {
+  ChatConversation({
+    required this.id,
+    required this.title,
+    required this.documentPath,
+    List<ChatMessage>? messages,
+  }) : messages = messages ?? [];
+
+  final String id;
+  String title;
+  final String documentPath;
+  final List<ChatMessage> messages;
+}
+
 class PdfPageModel {
   const PdfPageModel({required this.pageNumber, required this.text});
 
@@ -109,11 +130,39 @@ class ChatMessage {
     required this.text,
     required this.isUser,
     this.citation,
+    this.citations = const [],
+    this.id = '',
   });
 
+  final String id;
   final String text;
   final bool isUser;
   final String? citation;
+  final List<ChatCitation> citations;
+}
+
+class AiToolResult {
+  const AiToolResult({
+    required this.operation,
+    required this.title,
+    required this.content,
+    this.items = const [],
+  });
+
+  final String operation;
+  final String title;
+  final String content;
+  final List<Map<String, dynamic>> items;
+
+  factory AiToolResult.fromJson(Map<dynamic, dynamic> json) => AiToolResult(
+        operation: json['operation'] as String? ?? '',
+        title: json['title'] as String? ?? 'AI result',
+        content: json['content'] as String? ?? '',
+        items: (json['items'] as List<dynamic>? ?? const [])
+            .whereType<Map<dynamic, dynamic>>()
+            .map((item) => item.map((key, value) => MapEntry(key.toString(), value)))
+            .toList(),
+      );
 }
 
 class ToolDefinition {
