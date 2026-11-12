@@ -5,6 +5,7 @@
   "version": "1.0.0-draft.1",
   "description": "JSON-RPC 2.0 over stdio, newline-delimited UTF-8 JSON. stdout = protocol only; stderr = scrubbed logs. Notifications: job.progress (ProgressNotification), chat.delta (StreamDelta), job.finished (JobResult). Every error response carries data: ErrorData. Methods with x-job=true return a JobId immediately and finish via job.finished; cancel with job.cancel. x-network tags drive the UI's offline/online label."
  },
+ "x-authentication": "Every JSON-RPC request includes an out-of-band per-process auth field. The Flutter supervisor generates the token and passes it to the sidecar at startup.",
  "methods": [
   {
    "name": "system.handshake",

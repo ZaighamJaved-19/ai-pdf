@@ -150,7 +150,10 @@ class _ChatComposer extends StatelessWidget {
           Row(children: [
             Icon(Icons.lock_outline, size: 12, color: Theme.of(context).colorScheme.onSurfaceVariant),
             const SizedBox(width: 5),
-            Text('Only this document · OpenAI', style: TextStyle(fontSize: 10, color: Theme.of(context).colorScheme.onSurfaceVariant)),
+            Text(
+              state.apiKey.isEmpty ? 'Add an OpenAI key in Settings' : 'Only this document · OpenAI',
+              style: TextStyle(fontSize: 10, color: Theme.of(context).colorScheme.onSurfaceVariant),
+            ),
           ]),
         ],
       ),

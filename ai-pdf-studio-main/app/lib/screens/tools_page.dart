@@ -49,7 +49,10 @@ class ToolsPage extends StatelessWidget {
       builder: (context) => AlertDialog(
         title: Text(tool.label),
         content: Text('${tool.description}. Select a PDF from the library to begin this local workflow.'),
-        actions: [TextButton(onPressed: () => Navigator.pop(context), child: const Text('Close')), FilledButton(onPressed: () { Navigator.pop(context); state.addDocument(); }, child: const Text('Choose PDF'))],
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(context), child: const Text('Close')),
+          FilledButton(onPressed: () => Navigator.pop(context), child: const Text('Choose from library')),
+        ],
       ),
     );
   }

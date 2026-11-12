@@ -17,6 +17,9 @@ dependencies = [
 dev = [
     "pytest>=8.0,<9",
 ]
+packaging = [
+    "pyinstaller>=6.0,<7",
+]
 
 [tool.setuptools.packages.find]
 where = ["src"]

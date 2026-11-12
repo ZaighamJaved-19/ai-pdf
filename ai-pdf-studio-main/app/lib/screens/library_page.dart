@@ -38,7 +38,11 @@ class LibraryPage extends StatelessWidget {
                   ],
                 ),
               ),
-              FilledButton.icon(onPressed: state.addDocument, icon: const Icon(Icons.add, size: 18), label: const Text('Import PDF')),
+              FilledButton.icon(
+                onPressed: () => _showImportDialog(context),
+                icon: const Icon(Icons.add, size: 18),
+                label: const Text('Import PDF'),
+              ),
             ],
           ),
           const SizedBox(height: 28),
@@ -47,8 +51,6 @@ class LibraryPage extends StatelessWidget {
               _StatCard(label: 'All documents', value: '${state.documents.length}', icon: Icons.description_outlined),
               const SizedBox(width: 12),
               _StatCard(label: 'Favorites', value: '${state.documents.where((d) => d.favorite).length}', icon: Icons.star_outline_rounded),
-              const SizedBox(width: 12),
-              const _StatCard(label: 'AI questions', value: '12', icon: Icons.auto_awesome_outlined),
             ],
           ),
           const SizedBox(height: 28),
@@ -69,6 +71,29 @@ class LibraryPage extends StatelessWidget {
         ],
       ),
     );
+  }
+
+  Future<void> _showImportDialog(BuildContext context) async {
+    final controller = TextEditingController();
+    final path = await showDialog<String>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Import PDF'),
+        content: TextField(
+          controller: controller,
+          autofocus: true,
+          decoration: const InputDecoration(labelText: 'Full path to PDF'),
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(context), child: const Text('Cancel')),
+          FilledButton(onPressed: () => Navigator.pop(context, controller.text.trim()), child: const Text('Import')),
+        ],
+      ),
+    );
+    controller.dispose();
+    if (path != null && path.isNotEmpty) {
+      await state.importDocument(path);
+    }
   }
 }
 

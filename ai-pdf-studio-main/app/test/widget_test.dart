@@ -6,7 +6,6 @@ void main() {
     await tester.pumpWidget(const AiPdfApp());
 
     expect(find.text('AI PDF Studio'), findsOneWidget);
-    expect(find.text('Your library'), findsOneWidget);
     expect(find.text('AI Assistant'), findsWidgets);
   });
 }

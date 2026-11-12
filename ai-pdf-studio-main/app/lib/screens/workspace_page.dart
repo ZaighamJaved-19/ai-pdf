@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../app_state.dart';
+import '../models.dart';
 import '../widgets/common.dart';
 import 'chat_panel.dart';
 
@@ -33,8 +34,8 @@ class WorkspacePage extends StatelessWidget {
         Expanded(
           child: Row(
             children: [
-              const _ThumbnailRail(),
-              Expanded(child: _PdfCanvas(documentName: document.name, pages: document.pages)),
+              _ThumbnailRail(pages: state.selectedDetails?.pages ?? const []),
+              Expanded(child: _PdfTextViewer(details: state.selectedDetails)),
               if (state.chatOpen) SizedBox(width: 330, child: ChatPanel(state: state)),
             ],
           ),
@@ -45,16 +46,21 @@ class WorkspacePage extends StatelessWidget {
 }
 
 class _ThumbnailRail extends StatelessWidget {
-  const _ThumbnailRail();
+  const _ThumbnailRail({required this.pages});
+
+  final List<PdfPageModel> pages;
 
   @override
   Widget build(BuildContext context) {
+    if (pages.isEmpty) {
+      return const SizedBox(width: 92);
+    }
     return Container(
       width: 92,
       padding: const EdgeInsets.all(10),
       decoration: BoxDecoration(border: Border(right: BorderSide(color: Theme.of(context).dividerColor))),
       child: ListView.separated(
-        itemCount: 6,
+        itemCount: pages.length,
         separatorBuilder: (_, __) => const SizedBox(height: 10),
         itemBuilder: (context, index) => Container(
           height: 78,
@@ -63,28 +69,26 @@ class _ThumbnailRail extends StatelessWidget {
             borderRadius: BorderRadius.circular(6),
             border: Border.all(color: index == 0 ? Theme.of(context).colorScheme.primary : Theme.of(context).dividerColor),
           ),
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              Icon(Icons.description_outlined, size: 23, color: Theme.of(context).colorScheme.onSurfaceVariant),
-              const SizedBox(height: 5),
-              Text('${index + 1}', style: const TextStyle(fontSize: 11)),
-            ],
-          ),
+          child: Center(child: Text('${pages[index].pageNumber}', style: const TextStyle(fontSize: 11))),
         ),
       ),
     );
   }
 }
 
-class _PdfCanvas extends StatelessWidget {
-  const _PdfCanvas({required this.documentName, required this.pages});
+class _PdfTextViewer extends StatelessWidget {
+  const _PdfTextViewer({required this.details});
 
-  final String documentName;
-  final int pages;
+  final PdfDocumentDetails? details;
 
   @override
   Widget build(BuildContext context) {
+    if (details == null) {
+      return const Center(child: CircularProgressIndicator());
+    }
+    if (details!.pages.isEmpty) {
+      return const Center(child: Text('This PDF has no extractable text.'));
+    }
     return Container(
       color: Theme.of(context).brightness == Brightness.dark ? const Color(0xFF090D14) : const Color(0xFFE6E9EF),
       child: Column(
@@ -94,45 +98,47 @@ class _PdfCanvas extends StatelessWidget {
             child: Row(
               children: [
                 AppIconButton(icon: Icons.zoom_out, tooltip: 'Zoom out', onPressed: () {}),
-                const Text('100%', style: TextStyle(fontSize: 12)),
+                const Text('Text view', style: TextStyle(fontSize: 12)),
                 AppIconButton(icon: Icons.zoom_in, tooltip: 'Zoom in', onPressed: () {}),
                 const Spacer(),
-                Text('Page 1 of $pages', style: TextStyle(fontSize: 12, color: Theme.of(context).colorScheme.onSurfaceVariant)),
+                Text('${details!.pages.length} pages', style: TextStyle(fontSize: 12, color: Theme.of(context).colorScheme.onSurfaceVariant)),
                 const SizedBox(width: 15),
                 AppIconButton(icon: Icons.chat_bubble_outline, tooltip: 'Toggle AI assistant', onPressed: () {}),
               ],
             ),
           ),
           Expanded(
-            child: Center(
-              child: AspectRatio(
-                aspectRatio: .72,
-                child: Container(
-                  margin: const EdgeInsets.only(bottom: 24),
-                  padding: const EdgeInsets.fromLTRB(42, 48, 42, 38),
-                  color: Colors.white,
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Container(width: 130, height: 8, color: const Color(0xFF273044)),
-                      const SizedBox(height: 16),
-                      Text(documentName.replaceAll('.pdf', ''), style: const TextStyle(color: Color(0xFF182033), fontSize: 20, fontWeight: FontWeight.w700)),
-                      const SizedBox(height: 28),
-                      for (var index = 0; index < 12; index++)
-                        Padding(
-                          padding: const EdgeInsets.only(bottom: 11),
-                          child: FractionallySizedBox(
-                            widthFactor: index % 4 == 0 ? .8 : .96,
-                            child: Container(height: 5, color: const Color(0xFFD8DDE7)),
-                          ),
-                        ),
-                      const Spacer(),
-                      const Text('AI PDF Studio  ·  Preview', style: TextStyle(color: Color(0xFF9AA4B6), fontSize: 9)),
-                    ],
-                  ),
-                ),
-              ),
+            child: ListView.builder(
+              padding: const EdgeInsets.fromLTRB(40, 10, 40, 30),
+              itemCount: details!.pages.length,
+              itemBuilder: (context, index) => _PageText(page: details!.pages[index]),
             ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _PageText extends StatelessWidget {
+  const _PageText({required this.page});
+
+  final PdfPageModel page;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      margin: const EdgeInsets.only(bottom: 18),
+      padding: const EdgeInsets.all(28),
+      color: Theme.of(context).brightness == Brightness.dark ? Colors.white : Colors.white,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text('Page ${page.pageNumber}', style: const TextStyle(color: Color(0xFF6D7CFF), fontSize: 12, fontWeight: FontWeight.w700)),
+          const SizedBox(height: 14),
+          SelectableText(
+            page.text.isEmpty ? '[No extractable text on this page]' : page.text,
+            style: const TextStyle(color: Color(0xFF182033), height: 1.55, fontSize: 14),
           ),
         ],
       ),

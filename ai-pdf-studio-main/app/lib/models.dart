@@ -15,6 +15,14 @@ class PdfDocumentModel {
   final String updated;
   final bool favorite;
 
+  factory PdfDocumentModel.fromJson(Map<dynamic, dynamic> json) => PdfDocumentModel(
+        name: json['title'] as String? ?? (json['path'] as String).split(RegExp(r'[/\\]')).last,
+        path: json['path'] as String,
+        pages: (json['pageCount'] as num?)?.toInt() ?? 0,
+        updated: json['updatedAt'] as String? ?? '',
+        favorite: json['favorite'] as bool? ?? false,
+      );
+
   PdfDocumentModel copyWith({bool? favorite}) => PdfDocumentModel(
         name: name,
         path: path,
@@ -23,6 +31,31 @@ class PdfDocumentModel {
         favorite: favorite ?? this.favorite,
       );
 }
+
+class PdfPageModel {
+  const PdfPageModel({required this.pageNumber, required this.text});
+
+  final int pageNumber;
+  final String text;
+}
+
+class PdfDocumentDetails {
+  const PdfDocumentDetails({required this.pageCount, required this.pages});
+
+  final int pageCount;
+  final List<PdfPageModel> pages;
+
+  factory PdfDocumentDetails.fromJson(Map<dynamic, dynamic> info, Map<dynamic, dynamic> extracted) =>
+      PdfDocumentDetails(
+        pageCount: (info['pageCount'] as num?)?.toInt() ?? 0,
+        pages: ((extracted['pages'] as List<dynamic>? ?? const [])
+            .cast<Map<dynamic, dynamic>>())
+            .map((page) => PdfPageModel(
+                  pageNumber: (page['pageNumber'] as num).toInt(),
+                  text: page['text'] as String? ?? '',
+                ))
+            .toList(),
+      );
 
 class ChatMessage {
   const ChatMessage({

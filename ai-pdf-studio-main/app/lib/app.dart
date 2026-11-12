@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import 'app_state.dart';
+import 'di/container.dart';
 import 'screens/app_shell.dart';
 import 'theme.dart';
 
@@ -12,7 +13,13 @@ class AiPdfApp extends StatefulWidget {
 }
 
 class _AiPdfAppState extends State<AiPdfApp> {
-  final state = AppState();
+  late final AppState state;
+
+  @override
+  void initState() {
+    super.initState();
+    state = AppState(AppContainer());
+  }
 
   @override
   Widget build(BuildContext context) {
