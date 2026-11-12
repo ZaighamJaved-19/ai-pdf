@@ -17,6 +17,9 @@ class AppState extends ChangeNotifier {
   final AppContainer container;
   ThemeMode themeMode = ThemeMode.system;
   int navigationIndex = 0;
+  String? selectedFolder;
+  String? selectedTag;
+  String? selectedWorkspace;
   PdfDocumentModel? selectedDocument;
   PdfDocumentDetails? selectedDetails;
   String activeTool = 'Reader';
@@ -51,6 +54,11 @@ class AppState extends ChangeNotifier {
   String downloadFolder = '';
   bool cacheEnabled = true;
   int recentDocumentLimit = 20;
+  bool contentSearchMode = false;
+  List<ContentMatch> contentMatches = const [];
+  List<String> folders = const [];
+  List<String> tags = const [];
+  List<LibraryWorkspace> workspaces = const [];
   SharedPreferences? _preferences;
 
   Future<void> _initialize() async {
@@ -58,6 +66,7 @@ class AppState extends ChangeNotifier {
       _preferences = await SharedPreferences.getInstance();
       _loadPreferences();
       await container.start();
+      await refreshLibraryFacets();
       await refreshDocuments();
     } catch (error) {
       errorMessage = error.toString();
@@ -193,15 +202,163 @@ class AppState extends ChangeNotifier {
       documents = await container.documents.list(
         query: searchController.text.trim(),
         favorites: navigationIndex == 2,
+        folder: navigationIndex == 3 ? selectedFolder : null,
+        tag: navigationIndex == 5 ? selectedTag : null,
+        workspace: navigationIndex == 4 ? selectedWorkspace : null,
       );
       if (recentDocumentLimit > 0 && navigationIndex == 1 && documents.length > recentDocumentLimit) {
         documents = documents.take(recentDocumentLimit).toList();
       }
+
       isLoading = false;
       notifyListeners();
     } catch (error) {
       errorMessage = error.toString();
       isLoading = false;
+      notifyListeners();
+    }
+  }
+
+  Future<void> refreshLibraryFacets() async {
+    try {
+      folders = await container.documents.folders();
+      workspaces = await container.documents.workspaces();
+      final all = await container.documents.list();
+      tags = all.expand((document) => document.tags).toSet().toList()..sort();
+      notifyListeners();
+    } catch (error) {
+      errorMessage = error.toString();
+      notifyListeners();
+    }
+  }
+
+  Future<void> submitSearch() async {
+    if (contentSearchMode) {
+      try {
+        contentMatches = await container.documents.searchContent(searchController.text.trim());
+        notifyListeners();
+      } catch (error) {
+        errorMessage = error.toString();
+        notifyListeners();
+      }
+    } else {
+      await refreshDocuments();
+    }
+  }
+
+  Future<void> openSearchMatch(ContentMatch match) async {
+    final matching = documents.where((document) => document.path == match.path);
+    final existing = matching.isEmpty ? null : matching.first;
+    if (existing != null) {
+      await selectDocument(existing);
+      return;
+    }
+    final matches = await container.documents.list(query: match.path);
+    if (matches.isNotEmpty) await selectDocument(matches.first);
+  }
+
+  void toggleContentSearch() {
+    contentSearchMode = !contentSearchMode;
+    contentMatches = const [];
+    notifyListeners();
+  }
+
+  Future<void> selectFolder(String? folder) async {
+    selectedFolder = folder;
+    navigationIndex = 3;
+    await refreshDocuments();
+  }
+
+  Future<void> selectWorkspace(String? workspace) async {
+    selectedWorkspace = workspace;
+    navigationIndex = 4;
+    await refreshDocuments();
+  }
+
+  Future<void> selectTag(String? tag) async {
+    selectedTag = tag;
+    navigationIndex = 5;
+    await refreshDocuments();
+  }
+
+  Future<void> removeFromLibrary(PdfDocumentModel document) async {
+    try {
+      await container.documents.remove(document);
+      openDocuments.removeWhere((item) => item.path == document.path);
+      if (selectedDocument?.path == document.path) {
+        selectedDocument = null;
+        selectedDetails = null;
+      }
+      await refreshLibraryFacets();
+      await refreshDocuments();
+    } catch (error) {
+      errorMessage = error.toString();
+      notifyListeners();
+    }
+  }
+
+  Future<void> relocateDocument(PdfDocumentModel document, String newPath) async {
+    try {
+      final updated = await container.documents.relocate(document, newPath);
+      final index = documents.indexWhere((item) => item.path == document.path);
+      if (index >= 0) documents[index] = updated;
+      if (selectedDocument?.path == document.path) selectedDocument = updated;
+      await refreshLibraryFacets();
+      notifyListeners();
+    } catch (error) {
+      errorMessage = error.toString();
+      notifyListeners();
+    }
+  }
+
+  Future<void> saveNote(PdfDocumentModel document, String note) async {
+    try {
+      final saved = await container.documents.saveNote(document, note);
+      _replaceDocument(document.copyWith(note: saved));
+    } catch (error) {
+      errorMessage = error.toString();
+      notifyListeners();
+    }
+  }
+
+  Future<void> saveTags(PdfDocumentModel document, List<String> tags) async {
+    try {
+      final saved = await container.documents.setTags(document, tags);
+      _replaceDocument(document.copyWith(tags: saved));
+      await refreshLibraryFacets();
+    } catch (error) {
+      errorMessage = error.toString();
+      notifyListeners();
+    }
+  }
+
+  void _replaceDocument(PdfDocumentModel updated) {
+    final index = documents.indexWhere((item) => item.path == updated.path);
+    if (index >= 0) documents[index] = updated;
+    final tabIndex = openDocuments.indexWhere((item) => item.path == updated.path);
+    if (tabIndex >= 0) openDocuments[tabIndex] = updated;
+    if (selectedDocument?.path == updated.path) selectedDocument = updated;
+    notifyListeners();
+  }
+
+  Future<void> createWorkspace(String name) async {
+    try {
+      await container.documents.createWorkspace(name);
+      await refreshLibraryFacets();
+    } catch (error) {
+      errorMessage = error.toString();
+      notifyListeners();
+    }
+  }
+
+  Future<void> addToWorkspace(String workspace, PdfDocumentModel document) async {
+    try {
+      await container.documents.addToWorkspace(workspace, document);
+      selectedWorkspace = workspace;
+      navigationIndex = 4;
+      await refreshDocuments();
+    } catch (error) {
+      errorMessage = error.toString();
       notifyListeners();
     }
   }
@@ -311,7 +468,10 @@ class AppState extends ChangeNotifier {
 
   void setNavigation(int index) {
     navigationIndex = index;
-    if (index == 0 || index == 1 || index == 2) {
+    if (index == 3) selectedFolder = null;
+    if (index == 4) selectedWorkspace = null;
+    if (index == 5) selectedTag = null;
+    if (index == 0 || index == 1 || index == 2 || index == 3 || index == 4 || index == 5) {
       unawaited(refreshDocuments());
     }
     notifyListeners();

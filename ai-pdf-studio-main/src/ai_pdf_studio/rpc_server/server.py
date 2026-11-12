@@ -80,6 +80,17 @@ class SidecarServer:
             "job.result": self._job_result,
             "library.list": self._library_list,
             "library.upsert": self._library_upsert,
+            "library.remove": self._library_remove,
+            "library.relocate": self._library_relocate,
+            "library.note.get": self._library_note_get,
+            "library.note.set": self._library_note_set,
+            "library.tags": self._library_tags,
+            "library.tags.set": self._library_tags_set,
+            "library.folders": self._library_folders,
+            "library.workspaces": self._library_workspaces,
+            "library.workspace.create": self._library_workspace_create,
+            "library.workspace.add": self._library_workspace_add,
+            "library.searchContent": self._library_search_content,
             "pdf.inspect": self._pdf_inspect,
             "pdf.extractText": self._pdf_extract,
             "chat.ask": self._chat_ask,
@@ -169,16 +180,14 @@ class SidecarServer:
 
     def _library_list(self, params: dict[str, Any], _: Any) -> dict[str, Any]:
         scope = params.get("scope", "recent")
-        documents = self._database.list_recent(int(params.get("limit", 100)))
-        if scope == "favorites":
-            documents = tuple(document for document in documents if document.favorite)
-        query = str(params.get("query", "")).lower().strip()
-        if query:
-            documents = tuple(
-                document for document in documents
-                if query in (document.title or document.path.name).lower()
-                or query in str(document.path).lower()
-            )
+        documents = self._database.list_documents(
+            query=str(params.get("query", "")),
+            favorite=True if scope == "favorites" else None,
+            folder=params.get("folder"),
+            tag=params.get("tag"),
+            workspace=params.get("workspace"),
+            limit=int(params.get("limit", 100)),
+        )
         return {"documents": [self._document_json(document) for document in documents]}
 
     def _library_upsert(self, params: dict[str, Any], _: Any) -> dict[str, Any]:
@@ -193,7 +202,76 @@ class SidecarServer:
             last_page=int(params.get("lastPage", 1)),
             favorite=bool(params.get("favorite", False)),
         )
+        try:
+            pages = self._pdf.extract_text(path)
+            self._database.index_content(path, tuple((page.page_number, page.text) for page in pages))
+        except PdfError:
+            # Keep the library reference so the UI can report a corrupt or encrypted source.
+            pass
         return self._document_json(record)
+
+    def _library_remove(self, params: dict[str, Any], _: Any) -> dict[str, Any]:
+        path = Path(str(params["path"])).expanduser().resolve()
+        return {"removed": self._database.remove(path), "path": str(path)}
+
+    def _library_relocate(self, params: dict[str, Any], _: Any) -> dict[str, Any]:
+        old_path = Path(str(params["oldPath"])).expanduser().resolve()
+        new_path = Path(str(params["newPath"])).expanduser().resolve()
+        if not new_path.is_file():
+            raise RpcFailure(-32010, "The replacement PDF does not exist.", {"kind": "FileNotFound"})
+        if new_path.suffix.lower() != ".pdf":
+            raise RpcFailure(-32011, "The replacement file is not a PDF.", {"kind": "NotAPdf"})
+        record = self._database.relocate(old_path, new_path)
+        return self._document_json(record)
+
+    def _library_note_get(self, params: dict[str, Any], _: Any) -> dict[str, Any]:
+        path = Path(str(params["path"])).expanduser().resolve()
+        return {"path": str(path), "note": self._database.note(path)}
+
+    def _library_note_set(self, params: dict[str, Any], _: Any) -> dict[str, Any]:
+        path = Path(str(params["path"])).expanduser().resolve()
+        note = str(params.get("note", ""))
+        return {"path": str(path), "note": self._database.set_note(path, note)}
+
+    def _library_tags(self, params: dict[str, Any], _: Any) -> dict[str, Any]:
+        path = Path(str(params["path"])).expanduser().resolve()
+        return {"path": str(path), "tags": list(self._database.tags(path))}
+
+    def _library_tags_set(self, params: dict[str, Any], _: Any) -> dict[str, Any]:
+        path = Path(str(params["path"])).expanduser().resolve()
+        tags = {str(tag) for tag in params.get("tags", [])}
+        return {"path": str(path), "tags": list(self._database.set_tags(path, tags))}
+
+    def _library_folders(self, _: dict[str, Any], __: Any) -> dict[str, Any]:
+        return {"folders": list(self._database.list_folders())}
+
+    def _library_workspaces(self, _: dict[str, Any], __: Any) -> dict[str, Any]:
+        return {
+            "workspaces": [
+                {"name": workspace.name, "createdAt": workspace.created_at.isoformat()}
+                for workspace in self._database.list_workspaces()
+            ]
+        }
+
+    def _library_workspace_create(self, params: dict[str, Any], _: Any) -> dict[str, Any]:
+        workspace = self._database.create_workspace(str(params["name"]))
+        return {"name": workspace.name, "createdAt": workspace.created_at.isoformat()}
+
+    def _library_workspace_add(self, params: dict[str, Any], _: Any) -> dict[str, Any]:
+        self._database.add_to_workspace(str(params["workspace"]), Path(str(params["path"])))
+        return {"ok": True}
+
+    def _library_search_content(self, params: dict[str, Any], _: Any) -> dict[str, Any]:
+        if self._database.content_index_empty():
+            for record in self._database.list_documents(limit=1000):
+                if not record.exists:
+                    continue
+                try:
+                    pages = self._pdf.extract_text(record.path)
+                    self._database.index_content(record.path, tuple((page.page_number, page.text) for page in pages))
+                except PdfError:
+                    continue
+        return {"matches": list(self._database.search_content(str(params.get("query", "")), int(params.get("limit", 100))))}
 
     def _pdf_inspect(self, params: dict[str, Any], _: Any) -> dict[str, Any]:
         document = self._pdf.inspect(Path(str(params["path"])))
@@ -314,6 +392,9 @@ class SidecarServer:
             "favorite": record.favorite,
             "updatedAt": record.updated_at.isoformat(),
             "pageCount": page_count,
+            "status": "available" if record.exists else "missing",
+            "note": self._database.note(record.path),
+            "tags": list(self._database.tags(record.path)),
         }
 
     def _notify(self, method: str, params: dict[str, Any]) -> None:

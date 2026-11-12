@@ -10,6 +10,7 @@ import 'tools_page.dart';
 import 'workspace_page.dart';
 import 'info_page.dart';
 import 'onboarding_page.dart';
+import 'collections_page.dart';
 
 class AppShell extends StatelessWidget {
   const AppShell({required this.state, super.key});
@@ -121,7 +122,9 @@ class _Sidebar extends StatelessWidget {
           _NavButton(icon: Icons.grid_view_rounded, label: 'Library', collapsed: state.leftSidebarCollapsed, selected: state.navigationIndex == 0, onTap: () => state.setNavigation(0)),
           _NavButton(icon: Icons.description_outlined, label: 'Recent', collapsed: state.leftSidebarCollapsed, selected: state.navigationIndex == 1, onTap: () => state.setNavigation(1)),
           _NavButton(icon: Icons.star_outline_rounded, label: 'Favorites', collapsed: state.leftSidebarCollapsed, selected: state.navigationIndex == 2, onTap: () => state.setNavigation(2)),
-          _NavButton(icon: Icons.folder_open_outlined, label: 'Workspaces', collapsed: state.leftSidebarCollapsed, selected: state.navigationIndex == 3, onTap: () => state.setNavigation(3)),
+          _NavButton(icon: Icons.folder_open_outlined, label: 'Folders', collapsed: state.leftSidebarCollapsed, selected: state.navigationIndex == 3, onTap: () => state.setNavigation(3)),
+          _NavButton(icon: Icons.workspaces_outlined, label: 'Workspaces', collapsed: state.leftSidebarCollapsed, selected: state.navigationIndex == 4, onTap: () => state.setNavigation(4)),
+          _NavButton(icon: Icons.local_offer_outlined, label: 'Tags', collapsed: state.leftSidebarCollapsed, selected: state.navigationIndex == 5, onTap: () => state.setNavigation(5)),
           const SizedBox(height: 24),
           if (!state.leftSidebarCollapsed) const SectionLabel('Workspace'),
           if (!state.leftSidebarCollapsed) const SizedBox(height: 8),
@@ -129,7 +132,7 @@ class _Sidebar extends StatelessWidget {
           _NavButton(icon: Icons.auto_awesome_outlined, label: 'AI Assistant', collapsed: state.leftSidebarCollapsed, selected: state.activeTool == 'AI Assistant', onTap: () => state.setTool('AI Assistant')),
           _NavButton(icon: Icons.build_outlined, label: 'PDF Tools', collapsed: state.leftSidebarCollapsed, selected: state.activeTool == 'PDF Tools', onTap: () => state.setTool('PDF Tools')),
           const Spacer(),
-          _NavButton(icon: Icons.settings_outlined, label: 'Settings', collapsed: state.leftSidebarCollapsed, selected: state.navigationIndex == 4, onTap: () => state.setNavigation(4)),
+          _NavButton(icon: Icons.settings_outlined, label: 'Settings', collapsed: state.leftSidebarCollapsed, selected: state.navigationIndex == 6, onTap: () => state.setNavigation(6)),
           const SizedBox(height: 12),
           if (!state.leftSidebarCollapsed) const Text('v0.1.0  ·  Local-first', style: TextStyle(fontSize: 11, color: Color(0xFF7E899D))),
         ],
@@ -208,9 +211,16 @@ class _TopBar extends StatelessWidget {
                 prefixIcon: Icon(Icons.search, size: 19),
                 contentPadding: EdgeInsets.symmetric(vertical: 10),
               ),
+              onSubmitted: (_) => state.submitSearch(),
             ),
           ),
           const SizedBox(width: 12),
+          AppIconButton(
+            icon: state.contentSearchMode ? Icons.manage_search : Icons.find_in_page_outlined,
+            tooltip: state.contentSearchMode ? 'Search filenames' : 'Search inside documents',
+            active: state.contentSearchMode,
+            onPressed: state.toggleContentSearch,
+          ),
           SegmentedButton<String>(
             segments: const [
               ButtonSegment(value: 'Reading', icon: Icon(Icons.menu_book_outlined), label: Text('Reading')),
@@ -241,7 +251,10 @@ class _Content extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    if (state.navigationIndex == 4) return SettingsPage(state: state);
+    if (state.navigationIndex == 6) return SettingsPage(state: state);
+    if (state.navigationIndex == 3 && state.selectedFolder == null) return CollectionsPage(state: state, kind: CollectionKind.folders);
+    if (state.navigationIndex == 4 && state.selectedWorkspace == null) return CollectionsPage(state: state, kind: CollectionKind.workspaces);
+    if (state.navigationIndex == 5 && state.selectedTag == null) return CollectionsPage(state: state, kind: CollectionKind.tags);
     if (state.navigationIndex != 0 && state.activeTool == 'Reader') {
       return LibraryPage(state: state, filtered: true);
     }

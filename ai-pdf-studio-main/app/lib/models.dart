@@ -8,6 +8,9 @@ class PdfDocumentModel {
     required this.updated,
     this.favorite = false,
     this.lastPage = 1,
+    this.status = 'available',
+    this.note = '',
+    this.tags = const [],
   });
 
   final String name;
@@ -16,6 +19,9 @@ class PdfDocumentModel {
   final String updated;
   final bool favorite;
   final int lastPage;
+  final String status;
+  final String note;
+  final List<String> tags;
 
   factory PdfDocumentModel.fromJson(Map<dynamic, dynamic> json) => PdfDocumentModel(
         name: json['title'] as String? ?? (json['path'] as String).split(RegExp(r'[/\\]')).last,
@@ -24,16 +30,37 @@ class PdfDocumentModel {
         updated: json['updatedAt'] as String? ?? '',
         favorite: json['favorite'] as bool? ?? false,
         lastPage: (json['lastPage'] as num?)?.toInt() ?? 1,
+        status: json['status'] as String? ?? 'available',
+        note: json['note'] as String? ?? '',
+        tags: (json['tags'] as List<dynamic>? ?? const []).cast<String>(),
       );
 
-  PdfDocumentModel copyWith({bool? favorite, int? lastPage}) => PdfDocumentModel(
+  PdfDocumentModel copyWith({bool? favorite, int? lastPage, String? status, String? note, List<String>? tags, String? path}) => PdfDocumentModel(
         name: name,
-        path: path,
+        path: path ?? this.path,
         pages: pages,
         updated: updated,
         favorite: favorite ?? this.favorite,
         lastPage: lastPage ?? this.lastPage,
+        status: status ?? this.status,
+        note: note ?? this.note,
+        tags: tags ?? this.tags,
       );
+}
+
+class LibraryWorkspace {
+  const LibraryWorkspace({required this.name, required this.createdAt});
+
+  final String name;
+  final String createdAt;
+}
+
+class ContentMatch {
+  const ContentMatch({required this.path, required this.pageNumber, required this.snippet});
+
+  final String path;
+  final int pageNumber;
+  final String snippet;
 }
 
 class PdfPageModel {
