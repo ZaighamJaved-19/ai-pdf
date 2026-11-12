@@ -22,8 +22,10 @@ The repository currently contains a tested Python core that can back the planned
 - An MSIX manifest template and Windows packaging checklist.
 - Architecture and delivery documentation.
 
-The Flutter Windows UI is not included in this checkout yet. These services expose the behavior
-that a Flutter sidecar client can call without coupling UI code to PDF parsing or provider APIs.
+The Flutter Windows UI is now included under [`app/`](app/). It provides the library, reader,
+thumbnail rail, AI assistant, PDF tools, settings, theme switching, and OpenAI configuration
+surfaces. It currently uses an in-memory UI state and is ready to be wired to the Python
+JSON-RPC sidecar.
 
 OCR requires Tesseract, office conversion requires LibreOffice, and redaction requires the
 `pdftoppm` command plus Pillow. The services fail clearly when an optional engine is missing.
