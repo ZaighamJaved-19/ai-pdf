@@ -332,6 +332,7 @@ class SidecarServer:
             crop=params.get("crop"),
             text=params.get("text", []),
             image=params.get("images", []),
+            covers=params.get("covers", []),
             header=params.get("header"),
             footer=params.get("footer"),
             watermark=params.get("watermark"),

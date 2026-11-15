@@ -78,6 +78,7 @@ class _WorkspacePageState extends State<WorkspacePage> {
                   PopupMenuItem(value: 'extract', child: Text('Extract selected pages')),
                   PopupMenuItem(value: 'crop', child: Text('Crop current page')),
                   PopupMenuItem(value: 'headerFooter', child: Text('Headers, footers, watermark')),
+                  PopupMenuItem(value: 'cover', child: Text('Cover/remove content')),
                   PopupMenuItem(value: 'deletePage', child: Text('Delete current page')),
                 ],
                 child: const Padding(padding: EdgeInsets.all(8), child: Icon(Icons.layers_outlined, size: 19)),
@@ -239,65 +240,136 @@ class _WorkspacePageState extends State<WorkspacePage> {
       return;
     }
     if (type == 'text') {
-      final controller = TextEditingController();
-      final value = await showDialog<String>(
-        context: context,
-        builder: (context) => AlertDialog(
-          title: const Text('Add text annotation'),
-          content: TextField(controller: controller, minLines: 2, maxLines: 5, autofocus: true, decoration: const InputDecoration(labelText: 'Text')),
-          actions: [
-            TextButton(onPressed: () => Navigator.pop(context), child: const Text('Cancel')),
-            FilledButton(onPressed: () => Navigator.pop(context, controller.text), child: const Text('Add')),
+        final value = await _textPlacementDialog(context);
+        if (value == null || value['text']!.isEmpty) return;
+        await widget.state.applyPdfEdit(
+          text: [
+            {
+              'page': widget.state.currentPage,
+              'text': value['text'],
+              'x': value['x'],
+              'y': value['y'],
+              'width': value['width'],
+              'height': value['height'],
+            },
           ],
-        ),
-      );
-      controller.dispose();
-      if (value == null || value.trim().isEmpty) return;
-      await widget.state.applyPdfEdit(
-        text: [
-          {'page': widget.state.currentPage, 'text': value, 'x': 50, 'y': 650, 'width': 300, 'height': 40},
-        ],
-        label: 'text',
-      );
-      return;
+          label: 'text',
+        );
+        return;
     }
     if (type == 'freehand') {
-      final points = await _freehandDialog(context);
-      if (points == null || points.length < 2) return;
-      await widget.state.applyPdfEdit(
-        annotations: [
-          {
-            'page': widget.state.currentPage,
-            'type': 'freehand',
-            'points': points,
-            'x': 0,
-            'y': 0,
-            'width': 300,
-            'height': 300,
-          },
-        ],
-        label: 'freehand',
-      );
-      return;
+        final points = await _freehandDialog(context);
+        if (points == null || points.length < 2) return;
+        await widget.state.applyPdfEdit(
+          annotations: [
+            {
+              'page': widget.state.currentPage,
+              'type': 'freehand',
+              'points': points,
+              'x': 0,
+              'y': 0,
+              'width': 300,
+              'height': 300,
+            },
+          ],
+          label: 'freehand',
+        );
+        return;
     }
     final contents = await _annotationContents(context, type);
     if (contents == null && (type == 'comment' || type == 'sticky')) return;
     final item = <String, dynamic>{
-      'page': widget.state.currentPage,
-      'type': type,
-      'x': 50,
-      'y': 650,
-      'width': type == 'freehand' ? 160 : 180,
-      'height': type == 'freehand' ? 80 : 30,
-      'contents': contents ?? '',
+        'page': widget.state.currentPage,
+        'type': type,
+        'x': 50,
+        'y': 650,
+        'width': type == 'freehand' ? 160 : 180,
+        'height': type == 'freehand' ? 80 : 30,
+        'contents': contents ?? '',
     };
     if (type == 'arrow') {
-      item['x1'] = 50;
-      item['y1'] = 650;
-      item['x2'] = 230;
-      item['y2'] = 700;
+        item['x1'] = 50;
+        item['y1'] = 650;
+        item['x2'] = 230;
+        item['y2'] = 700;
     }
     await widget.state.applyPdfEdit(annotations: [item], label: type);
+  }
+
+  Future<Map<String, dynamic>?> _textPlacementDialog(BuildContext context) async {
+    final controllers = {
+        'text': TextEditingController(),
+        'x': TextEditingController(text: '50'),
+        'y': TextEditingController(text: '650'),
+        'width': TextEditingController(text: '300'),
+        'height': TextEditingController(text: '40'),
+    };
+    final value = await showDialog<Map<String, dynamic>>(
+        context: context,
+        builder: (context) => AlertDialog(
+          title: const Text('Add text anywhere'),
+          content: SizedBox(
+            width: 360,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: controllers.entries.map((entry) => TextField(
+                controller: entry.value,
+                autofocus: entry.key == 'text',
+                minLines: entry.key == 'text' ? 2 : 1,
+                maxLines: entry.key == 'text' ? 4 : 1,
+                keyboardType: entry.key == 'text' ? TextInputType.text : TextInputType.number,
+                decoration: InputDecoration(labelText: entry.key),
+              )).toList(),
+            ),
+          ),
+          actions: [
+            TextButton(onPressed: () => Navigator.pop(context), child: const Text('Cancel')),
+            FilledButton(
+              onPressed: () => Navigator.pop(context, {
+                'text': controllers['text']!.text.trim(),
+                for (final key in ['x', 'y', 'width', 'height']) key: double.tryParse(controllers[key]!.text) ?? 0,
+              }),
+              child: const Text('Add'),
+            ),
+          ],
+      );
+    );
+    for (final controller in controllers.values) controller.dispose();
+    return value;
+  }
+
+  Future<Map<String, double>?> _coverDialog(BuildContext context) async {
+    final controllers = {
+        'x': TextEditingController(text: '50'),
+        'y': TextEditingController(text: '650'),
+        'width': TextEditingController(text: '300'),
+        'height': TextEditingController(text: '40'),
+    };
+    final value = await showDialog<Map<String, double>>(
+        context: context,
+        builder: (context) => AlertDialog(
+          title: const Text('Cover/remove existing content'),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: controllers.entries.map((entry) => TextField(
+              controller: entry.value,
+              keyboardType: TextInputType.number,
+              decoration: InputDecoration(labelText: entry.key),
+            )).toList(),
+          ),
+          actions: [
+            TextButton(onPressed: () => Navigator.pop(context), child: const Text('Cancel')),
+            FilledButton(
+              onPressed: () => Navigator.pop(context, {
+                for (final entry in controllers.entries) entry.key: double.tryParse(entry.value.text) ?? 0,
+              }),
+              child: const Text('Cover'),
+            ),
+          ],
+        ),
+    );
+    for (final controller in controllers.values) controller.dispose();
+    return value;
   }
 
   Future<String?> _annotationContents(BuildContext context, String type) async {
@@ -348,6 +420,21 @@ class _WorkspacePageState extends State<WorkspacePage> {
         await widget.state.applyPdfEdit(
           crop: {'page': widget.state.currentPage.toDouble(), ...values},
           label: 'crop',
+        );
+      }
+      return;
+    }
+    if (operation == 'cover') {
+      final values = await _coverDialog(context);
+      if (values != null) {
+        await widget.state.applyPdfEdit(
+          covers: [
+            {
+              'page': widget.state.currentPage,
+              ...values,
+            },
+          ],
+          label: 'cover',
         );
       }
       return;

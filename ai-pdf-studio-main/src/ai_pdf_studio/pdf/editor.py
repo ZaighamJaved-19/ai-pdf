@@ -22,6 +22,7 @@ class PdfEditor:
         crop: dict[str, float] | None = None,
         text: Iterable[dict[str, Any]] = (),
         image: Iterable[dict[str, Any]] = (),
+        covers: Iterable[dict[str, Any]] = (),
         header: str | None = None,
         footer: str | None = None,
         watermark: str | None = None,
@@ -33,6 +34,7 @@ class PdfEditor:
         annotation_items = tuple(annotations)
         text_items = tuple(text)
         image_items = tuple(image)
+        cover_items = tuple(covers)
         for page_number, page in enumerate(reader.pages, start=1):
             page_annotations = [item for item in annotation_items if int(item.get("page", 1)) == page_number]
             self._apply_crop(page, crop if crop and int(crop.get("page", page_number)) == page_number else None)
@@ -44,13 +46,15 @@ class PdfEditor:
             for item in image_items:
                 if int(item.get("page", 1)) == page_number:
                     self._add_image(page, item)
-            if header or footer or watermark:
+            page_covers = [item for item in cover_items if int(item.get("page", 1)) == page_number]
+            if header or footer or watermark or page_covers:
                 overlay = _text_overlay(
                     float(page.mediabox.width),
                     float(page.mediabox.height),
                     header=header.replace("{page}", str(page_number)).replace("{pages}", str(total_pages)) if header else None,
                     footer=footer.replace("{page}", str(page_number)).replace("{pages}", str(total_pages)) if footer else None,
                     watermark=watermark,
+                    covers=page_covers,
                 )
                 page.merge_page(overlay)
         return self._write(reader, output)
@@ -219,6 +223,7 @@ def _text_overlay(
     header: str | None,
     footer: str | None,
     watermark: str | None,
+    covers: Iterable[dict[str, Any]] = (),
 ) -> Any:
     from pypdf import PdfReader
 
@@ -229,6 +234,14 @@ def _text_overlay(
         commands.append(f"BT /F1 9 Tf 36 20 Td ({_escape(footer)}) Tj ET")
     if watermark:
         commands.append(f"BT /F1 28 Tf 150 {height / 2:.2f} Td ({_escape(watermark)}) Tj ET")
+    for item in covers:
+        x = float(item.get("x", 0))
+        y = float(item.get("y", 0))
+        cover_width = float(item.get("width", 100))
+        cover_height = float(item.get("height", 20))
+        if cover_width <= 0 or cover_height <= 0:
+            raise ValueError("Cover width and height must be positive.")
+        commands.append(f"q 1 1 1 rg {x:.2f} {y:.2f} {cover_width:.2f} {cover_height:.2f} re f Q")
     content = "\n".join(commands).encode("latin-1", errors="replace")
     objects = [
         b"<< /Type /Catalog /Pages 2 0 R >>",
