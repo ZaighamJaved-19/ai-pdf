@@ -83,7 +83,7 @@ class _WorkspacePageState extends State<WorkspacePage> {
                 child: const Padding(padding: EdgeInsets.all(8), child: Icon(Icons.layers_outlined, size: 19)),
               ),
               AppIconButton(icon: Icons.save_outlined, tooltip: 'Save', onPressed: widget.state.savePdf),
-              AppIconButton(icon: Icons.save_as_outlined, tooltip: 'Save As', onPressed: widget.state.savePdfAs),
+              AppIconButton(icon: Icons.file_download_outlined, tooltip: 'Download edited PDF', onPressed: widget.state.downloadPdf),
               AppIconButton(icon: Icons.print_outlined, tooltip: 'Print', onPressed: widget.state.printSelected),
               AppIconButton(icon: widget.state.chatOpen ? Icons.forum : Icons.forum_outlined, tooltip: widget.state.chatOpen ? 'Collapse AI panel' : 'Open AI panel', active: widget.state.chatOpen, onPressed: widget.state.toggleChat),
               AppIconButton(icon: Icons.fullscreen, tooltip: 'Full screen', onPressed: widget.state.toggleReaderFullScreen),

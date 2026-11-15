@@ -153,6 +153,8 @@ class AppState extends ChangeNotifier {
     return editedPdfPath;
   }
 
+  Future<String?> downloadPdf() => savePdfAs();
+
   Future<String?> compressCurrentPdf(String outputPath) async {
     final input = readerPdfPath;
     if (input == null) return null;
@@ -165,66 +167,66 @@ class AppState extends ChangeNotifier {
       notifyListeners();
       return null;
     }
+  }
 
-    Future<String?> protectCurrentPdf(String password, String outputPath, {List<String> permissions = const []}) async {
-      final input = readerPdfPath;
-      if (input == null || password.isEmpty) return null;
-      try {
-        final path = await container.pdfEditor.protect(
-          inputPath: input,
-          outputPath: outputPath,
-          userPassword: password,
-          permissions: permissions,
-        );
-        _recordEdit(path);
-        return path;
-      } catch (error) {
-        errorMessage = error.toString();
-        notifyListeners();
-        return null;
-      }
+  Future<String?> protectCurrentPdf(String password, String outputPath, {List<String> permissions = const []}) async {
+    final input = readerPdfPath;
+    if (input == null || password.isEmpty) return null;
+    try {
+      final path = await container.pdfEditor.protect(
+        inputPath: input,
+        outputPath: outputPath,
+        userPassword: password,
+        permissions: permissions,
+      );
+      _recordEdit(path);
+      return path;
+    } catch (error) {
+      errorMessage = error.toString();
+      notifyListeners();
+      return null;
     }
+  }
 
-    Future<String?> removePasswordFromCurrentPdf(String password, String outputPath) async {
-      final input = readerPdfPath;
-      if (input == null || password.isEmpty) return null;
-      try {
-        final path = await container.pdfEditor.removePassword(input, outputPath, password);
-        _recordEdit(path);
-        return path;
-      } catch (error) {
-        errorMessage = error.toString();
-        notifyListeners();
-        return null;
-      }
+  Future<String?> removePasswordFromCurrentPdf(String password, String outputPath) async {
+    final input = readerPdfPath;
+    if (input == null || password.isEmpty) return null;
+    try {
+      final path = await container.pdfEditor.removePassword(input, outputPath, password);
+      _recordEdit(path);
+      return path;
+    } catch (error) {
+      errorMessage = error.toString();
+      notifyListeners();
+      return null;
     }
+  }
 
-    Future<String?> removeMetadataFromCurrentPdf(String outputPath) async {
-      final input = readerPdfPath;
-      if (input == null) return null;
-      try {
-        final path = await container.pdfEditor.removeMetadata(input, outputPath);
-        _recordEdit(path);
-        return path;
-      } catch (error) {
-        errorMessage = error.toString();
-        notifyListeners();
-        return null;
-      }
+  Future<String?> removeMetadataFromCurrentPdf(String outputPath) async {
+    final input = readerPdfPath;
+    if (input == null) return null;
+    try {
+      final path = await container.pdfEditor.removeMetadata(input, outputPath);
+      _recordEdit(path);
+      return path;
+    } catch (error) {
+      errorMessage = error.toString();
+      notifyListeners();
+      return null;
     }
+  }
 
-    Future<String?> redactCurrentPdf(String outputPath, {List<String> terms = const [], List<Map<String, dynamic>> regions = const []}) async {
-      final input = readerPdfPath;
-      if (input == null) return null;
-      try {
-        final path = await container.pdfEditor.redact(inputPath: input, outputPath: outputPath, terms: terms, regions: regions);
-        _recordEdit(path);
-        return path;
-      } catch (error) {
-        errorMessage = error.toString();
-        notifyListeners();
-        return null;
-      }
+  Future<String?> redactCurrentPdf(String outputPath, {List<String> terms = const [], List<Map<String, dynamic>> regions = const []}) async {
+    final input = readerPdfPath;
+    if (input == null) return null;
+    try {
+      final path = await container.pdfEditor.redact(inputPath: input, outputPath: outputPath, terms: terms, regions: regions);
+      _recordEdit(path);
+      return path;
+    } catch (error) {
+      errorMessage = error.toString();
+      notifyListeners();
+      return null;
     }
   }
 
@@ -819,8 +821,9 @@ class AppState extends ChangeNotifier {
 
   Future<void> printSelected() async {
     final document = selectedDocument;
-    if (document == null) return;
-    final bytes = await File(document.path).readAsBytes();
+    final path = readerPdfPath ?? document?.path;
+    if (path == null) return;
+    final bytes = await File(path).readAsBytes();
     await Printing.layoutPdf(onLayout: (_) async => bytes);
   }
 
